@@ -1,0 +1,140 @@
+/* GitLab Real Notify · Theme
+   Übernommen aus ZeitBudget (Mochi Dual-Mode), ohne Maskottchen- und
+   Zeitstufen-Token. Umschaltung ausschließlich über
+   @media (prefers-color-scheme: dark) auf :root — kein Toggle.
+   Kontrastwerte und ihre Herleitung: ../zeitbudget/theme.css. */
+
+@font-face {
+  font-family: "Baloo 2";
+  font-weight: 400 650;
+  font-display: swap;
+  src: url("fonts/baloo-2-latin-600-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Baloo 2";
+  font-weight: 651 900;
+  font-display: swap;
+  src: url("fonts/baloo-2-latin-800-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Outfit";
+  font-weight: 300 500;
+  font-display: swap;
+  src: url("fonts/outfit-latin-400-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Outfit";
+  font-weight: 501 900;
+  font-display: swap;
+  src: url("fonts/outfit-latin-600-normal.woff2") format("woff2");
+}
+
+:root {
+  color-scheme: light dark;
+
+  --bg: #fff8fa;
+  --panel: #ffffff;
+  --line: #f6dce6;
+  --line-soft: #f1e0e8;
+  --track: #f5e6ec;
+  --tally-bg: #ffe4ef;
+
+  --ink: #3b2c43;
+  --body: #4a3a52;
+  --muted: #705c68;   /* 5,9:1 auf --bg */
+  --muted-2: #88687c; /* 4,6:1 */
+  --label: #3b2c43;
+  --label-weight: 700;
+
+  --accent: #f0679b;
+  --accent-hi: #ff9dbe;
+  --accent-lo: #f0679b;
+  --on-accent: #2a1f35;
+  --accent-ink: #dc1661;
+  --mint: #2d976b;
+  --mint-ink: #26805b;
+
+  --ghost-line: #f0cfdd;
+  --field-ink: #6b5872;
+  --btn-shadow: 0 10px 22px -10px rgba(240, 103, 155, 0.85);
+
+  --icon-bg: linear-gradient(160deg, #ffd6e4, #ff9dbe);
+  --icon-ink: #2a1f35;
+
+  --font-display: "Baloo 2", system-ui, sans-serif;
+  --font-body: "Outfit", system-ui, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #221a2b;
+    --panel: #2e2338;
+    --line: #3e3049;
+    --line-soft: #332741;
+    --track: #332741;
+    --tally-bg: #3a2333;
+
+    --ink: #f6eef6;
+    --body: #f6eef6;
+    --muted: #a896b4;
+    --muted-2: #988aa4;
+    --label: #c9b8d2;
+    --label-weight: 600;
+
+    --accent: #ff8fb5;
+    --accent-hi: #ffa3c2;
+    --accent-lo: #f2628f;
+    --on-accent: #2a1f35;
+    --accent-ink: #ff8fb5;
+    --mint: #86e3c0;
+    --mint-ink: #86e3c0;
+
+    --ghost-line: #3e3049;
+    --field-ink: #dccfe4;
+    --btn-shadow: 0 12px 26px -10px rgba(255, 143, 181, 0.6);
+
+    --icon-bg: linear-gradient(160deg, #ff8fb5, #e0709a);
+    --icon-ink: #2a1f35;
+  }
+}
+
+.pill {
+  border: none;
+  border-radius: 999px;
+  background: linear-gradient(180deg, var(--accent-hi), var(--accent-lo));
+  color: var(--on-accent);
+  font-family: var(--font-display);
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: var(--btn-shadow);
+  transition: transform 0.1s ease, filter 0.1s ease;
+}
+.pill:hover { transform: translateY(-1px); filter: brightness(1.03); }
+.pill:active { transform: translateY(1px); }
+.pill:focus-visible { outline: 3px solid var(--mint); outline-offset: 2px; }
+.pill:disabled { opacity: 0.55; cursor: progress; transform: none; }
+
+.eyebrow {
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+/* Branch-Symbol als Plakette, wie das Toolbar-Icon. */
+.mark {
+  width: 24px; height: 24px; flex-shrink: 0;
+  border-radius: 8px;
+  background: var(--icon-bg);
+  display: flex; align-items: center; justify-content: center;
+}
+.mark svg { width: 16px; height: 16px; display: block; }
+
+[hidden] { display: none !important; }
+
+@media (prefers-reduced-motion: reduce) {
+  .pill { transition: none; }
+  .pill:hover, .pill:active { transform: none; }
+}

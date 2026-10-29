@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>GitLab Real Notify · Tests</title>
+<link rel="stylesheet" href="../theme.css" />
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font-family: var(--font-body);
+    padding: 32px 24px 64px;
+    display: flex; justify-content: center;
+  }
+  main { width: 100%; max-width: 760px; }
+  h1 { font-family: var(--font-display); font-weight: 800; font-size: 24px; }
+  .lede { font-size: 13px; color: var(--muted); margin-top: 4px; }
+  .summary {
+    margin: 20px 0 24px; padding: 16px 18px;
+    border-radius: 14px; border: 1px solid var(--line); background: var(--panel);
+  }
+  .summary .big { font-family: var(--font-display); font-weight: 800; font-size: 28px; }
+  .pass { color: var(--mint-ink); }
+  .fail { color: var(--accent-ink); }
+  .suite { margin-bottom: 18px; }
+  .suite h2 {
+    font-family: var(--font-display); font-weight: 700; font-size: 15px;
+    padding-bottom: 6px; border-bottom: 1px solid var(--line-soft);
+  }
+  ul { list-style: none; margin-top: 8px; }
+  li { font-size: 13px; line-height: 1.7; }
+  li.no { color: var(--accent-ink); }
+  .detail { font-family: var(--font-mono); font-size: 11px; color: var(--muted-2); white-space: pre-wrap; }
+  code { font-family: var(--font-mono); font-size: 11px; }
+  .hint { margin-top: 28px; font-size: 12px; color: var(--muted); }
+</style>
+</head>
+<body>
+  <main>
+    <h1>GitLab Real Notify · Tests</h1>
+    <p class="lede">Gegen die echte background.js, mit Chrome-Double, angehaltener Uhr und GitLab-Double.</p>
+    <div class="summary" id="summary">läuft…</div>
+    <div id="report"></div>
+    <p class="hint">Im Projektordner <code>python -m http.server 8000</code>, dann
+      <code>http://127.0.0.1:8000/tests/</code>.</p>
+  </main>
+
+  <script src="harness.js"></script>
+  <script src="suite-poll.js"></script>
+  <script src="suite-newmrs.js"></script>
+  <script>
+  (async () => {
+    const report = await RN.run();
+    const alle = report.reduce((a, s) => a.concat(s.results), []);
+    const fehler = alle.filter((r) => !r.ok);
+    const sum = document.getElementById("summary");
+    const big = document.createElement("span");
+    big.className = "big " + (fehler.length ? "fail" : "pass");
+    big.textContent = fehler.length ? fehler.length + " von " + alle.length + " fehlgeschlagen"
+                                    : alle.length + " Prüfungen grün";
+    sum.textContent = "";
+    sum.appendChild(big);
+
+    const out = document.getElementById("report");
+    for (const s of report) {
+      const div = document.createElement("div");
+      div.className = "suite";
+      const h = document.createElement("h2");
+      h.textContent = s.name;
+      div.appendChild(h);
+      const ul = document.createElement("ul");
+      for (const r of s.results) {
+        const li = document.createElement("li");
+        li.className = r.ok ? "ok" : "no";
+        li.textContent = (r.ok ? "✓ " : "✕ ") + r.name;
+        if (!r.ok && r.detail != null) {
+          const d = document.createElement("div");
+          d.className = "detail";
+          d.textContent = typeof r.detail === "string" ? r.detail : JSON.stringify(r.detail);
+          li.appendChild(d);
+        }
+        ul.appendChild(li);
+      }
+      div.appendChild(ul);
+      out.appendChild(div);
+    }
+    document.title = (fehler.length ? "FAIL " + fehler.length : "PASS") + " · Real Notify Tests";
+    window.__rnResult = { total: alle.length, failed: fehler.length, failures: fehler };
+  })();
+  </script>
+</body>
+</html>
