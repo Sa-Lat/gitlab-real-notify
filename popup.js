@@ -101,25 +101,7 @@ document.getElementById("check").addEventListener("click", async (ev) => {
   await refresh(); // setzt disabled passend zum Token zurück
 });
 
-// Alles auf einmal weg ist nicht rückgängig zu machen: erst nachfragen,
-// der zweite Klick innerhalb von 3 Sekunden räumt ab.
-let confirmTimer = null;
-document.getElementById("clearAll").addEventListener("click", async (ev) => {
-  const btn = ev.currentTarget;
-  if (!confirmTimer) {
-    btn.textContent = "Wirklich alle entfernen?";
-    btn.classList.add("confirm");
-    confirmTimer = setTimeout(() => {
-      btn.textContent = "Alle entfernen";
-      btn.classList.remove("confirm");
-      confirmTimer = null;
-    }, 3000);
-    return;
-  }
-  clearTimeout(confirmTimer);
-  confirmTimer = null;
-  btn.textContent = "Alle entfernen";
-  btn.classList.remove("confirm");
+document.getElementById("clearAll").addEventListener("click", async () => {
   document.querySelectorAll("#list li").forEach(drop);
   await chrome.runtime.sendMessage({ type: "dismiss" });
 });

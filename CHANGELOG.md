@@ -4,6 +4,13 @@ Version steht in [`manifest.json`](manifest.json). Nach größeren Änderungen
 anheben: neue Funktion → Minor (0.**x**.0), nur Fehlerbehebung → Patch
 (0.x.**y**). Danach `python firefox.py` neu laufen lassen.
 
+## 0.3.1 — 2026-10-29
+
+- „Alle entfernen“ räumt wieder sofort ab, ohne Rückfrage.
+- Schriftzug „GitLab Real Notify“ in Popup und Einstellungen sowie die
+  Fußzeile im Popup („vor 1 Min · @name“, „Alle entfernen“, „Einstellungen“)
+  wieder schlank mit 12px; alles andere bleibt ab 14px.
+
 ## 0.3.0 — 2026-10-29
 
 - **Neu: Abfrage-Takt einstellbar.** In den Einstellungen „Wie oft prüfen“:
