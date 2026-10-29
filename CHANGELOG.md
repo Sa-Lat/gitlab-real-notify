@@ -1,8 +1,14 @@
 # Changelog
 
 Version steht in [`manifest.json`](manifest.json). Nach größeren Änderungen
-anheben: neue Funktion → Minor (0.**x**.0), nur Fehlerbehebung → Patch
-(0.x.**y**). Danach `python firefox.py` neu laufen lassen.
+anheben: größere neue Funktion → Minor (0.**x**.0), Fehlerbehebung oder
+kleine Ergänzung wie ein Link → Patch (0.x.**y**). Danach
+`python firefox.py` neu laufen lassen.
+
+## 0.3.2 — 2026-10-29
+
+- Popup-Fußzeile: Link **MR-Liste** öffnet die MR-Übersicht in GitLab
+  (`/dashboard/merge_requests`).
 
 ## 0.3.1 — 2026-10-29
 

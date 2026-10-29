@@ -42,6 +42,12 @@ function render(status) {
   // Ohne Token gibt es nichts zu prüfen — und „Noch nichts Neues“ wäre gelogen.
   document.getElementById("check").disabled = !status.hasToken;
 
+  // Sprung zur MR-Übersicht in GitLab (zugewiesen, Review, eigene).
+  const mrLink = document.getElementById("mrLink");
+  const base = /^https:\/\//i.test(status.url || "") ? status.url : null;
+  mrLink.hidden = document.getElementById("mrSep").hidden = !base;
+  if (base) mrLink.href = base + "/dashboard/merge_requests";
+
   const list = document.getElementById("list");
   list.textContent = "";
   for (const e of status.history) {
