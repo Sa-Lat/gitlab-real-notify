@@ -21,10 +21,26 @@ function drop(li) {
   document.getElementById("sep").hidden = empty;
 }
 
+function openOptions(ev) {
+  ev.preventDefault();
+  chrome.runtime.openOptionsPage();
+}
+
 function render(status) {
   const err = document.getElementById("error");
-  err.textContent = status.error || (status.hasToken ? "" : "Noch kein Token eingetragen — ab in die Einstellungen.");
-  err.hidden = !err.textContent;
+  const text = status.error || (status.hasToken ? "" : "Noch kein Token eingetragen.");
+  err.textContent = text ? text + " " : "";
+  err.hidden = !text;
+  if (text) {
+    const go = document.createElement("button");
+    go.type = "button";
+    go.className = "link";
+    go.textContent = "Einstellungen öffnen";
+    go.addEventListener("click", openOptions);
+    err.appendChild(go);
+  }
+  // Ohne Token gibt es nichts zu prüfen — und „Noch nichts Neues“ wäre gelogen.
+  document.getElementById("check").disabled = !status.hasToken;
 
   const list = document.getElementById("list");
   list.textContent = "";
@@ -33,6 +49,7 @@ function render(status) {
     const a = document.createElement("a");
     a.className = "event" + (e.read ? "" : " unread");
     a.href = e.url || "#";
+    a.title = e.title + (e.message ? "\n" + e.message : ""); // Titel ist einzeilig gekürzt
     for (const [cls, text] of [["title", e.title], ["message", e.message], ["when", ago(e.at)]]) {
       const div = document.createElement("div");
       div.className = cls;
@@ -63,7 +80,7 @@ function render(status) {
     list.appendChild(li);
   }
   const empty = status.history.length === 0;
-  document.getElementById("empty").hidden = !empty;
+  document.getElementById("empty").hidden = !empty || !status.hasToken;
   document.getElementById("clearAll").hidden = empty;
   document.getElementById("sep").hidden = empty;
   document.getElementById("last").textContent = status.lastPoll
@@ -78,19 +95,35 @@ async function refresh() {
 document.getElementById("check").addEventListener("click", async (ev) => {
   const btn = ev.currentTarget; // ev.target kann das SVG im Button sein
   btn.disabled = true;
+  btn.classList.add("busy");
   await chrome.runtime.sendMessage({ type: "pollNow" });
-  await refresh();
-  btn.disabled = false;
+  btn.classList.remove("busy");
+  await refresh(); // setzt disabled passend zum Token zurück
 });
 
-document.getElementById("clearAll").addEventListener("click", async () => {
+// Alles auf einmal weg ist nicht rückgängig zu machen: erst nachfragen,
+// der zweite Klick innerhalb von 3 Sekunden räumt ab.
+let confirmTimer = null;
+document.getElementById("clearAll").addEventListener("click", async (ev) => {
+  const btn = ev.currentTarget;
+  if (!confirmTimer) {
+    btn.textContent = "Wirklich alle entfernen?";
+    btn.classList.add("confirm");
+    confirmTimer = setTimeout(() => {
+      btn.textContent = "Alle entfernen";
+      btn.classList.remove("confirm");
+      confirmTimer = null;
+    }, 3000);
+    return;
+  }
+  clearTimeout(confirmTimer);
+  confirmTimer = null;
+  btn.textContent = "Alle entfernen";
+  btn.classList.remove("confirm");
   document.querySelectorAll("#list li").forEach(drop);
   await chrome.runtime.sendMessage({ type: "dismiss" });
 });
 
-document.getElementById("optionsLink").addEventListener("click", (ev) => {
-  ev.preventDefault();
-  chrome.runtime.openOptionsPage();
-});
+document.getElementById("optionsLink").addEventListener("click", openOptions);
 
 refresh().then(() => chrome.runtime.sendMessage({ type: "markRead" }));

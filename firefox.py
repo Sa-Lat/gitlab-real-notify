@@ -19,7 +19,7 @@ shutil.copytree(root, out, ignore=shutil.ignore_patterns(
 manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
 manifest["background"] = {"scripts": ["background.js"]}
 manifest["browser_specific_settings"] = {
-    "gecko": {"id": "gitlab-real-notify@queo.de", "strict_min_version": "128.0"}
+    "gecko": {"id": "{fee5fc53-d9cf-4af8-824a-cb3592ca486c}", "strict_min_version": "128.0"}
 }
 (out / "manifest.json").write_text(
     json.dumps(manifest, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")

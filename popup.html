@@ -6,7 +6,7 @@
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
-    width: 340px;
+    width: 380px; /* 14px-Text braucht Platz, sonst kappen die Titel früh */
     background: var(--bg);
     color: var(--ink);
     font-family: var(--font-body);
@@ -14,21 +14,22 @@
   }
 
   .head { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
-  .head .eyebrow { flex: 1; font-size: 10px; letter-spacing: 0.16em; font-weight: 700; }
+  .head .eyebrow { flex: 1; font-size: 14px; letter-spacing: 0.08em; font-weight: 700; }
   #check {
     width: 24px; height: 24px; padding: 0; /* so hoch wie die .mark-Plakette links */
     display: flex; align-items: center; justify-content: center;
   }
   #check svg { width: 13px; height: 13px; display: block; }
-  /* Dreht sich, solange geprüft wird. */
-  #check:disabled svg { animation: spin 0.8s linear infinite; }
+  /* Dreht sich, solange geprüft wird (busy); ohne Token nur ausgegraut (disabled). */
+  #check.busy svg { animation: spin 0.8s linear infinite; }
+  #check:disabled:not(.busy) { cursor: not-allowed; }
   @keyframes spin { to { transform: rotate(360deg); } }
-  @media (prefers-reduced-motion: reduce) { #check:disabled svg { animation: none; } }
+  @media (prefers-reduced-motion: reduce) { #check.busy svg { animation: none; } }
 
   .error {
     padding: 10px 12px; margin-bottom: 10px;
     border-radius: 12px; background: var(--tally-bg);
-    font-size: 12px; line-height: 1.5;
+    font-size: 14px; line-height: 1.5;
   }
 
   ul { list-style: none; max-height: 420px; overflow-y: auto; }
@@ -39,19 +40,20 @@
     color: inherit; text-decoration: none;
     border-radius: 8px; position: relative;
   }
-  a.event:hover { background: var(--panel); }
+  a.event:hover { background: var(--hover); }
   a.event:focus-visible { outline: 3px solid var(--mint); outline-offset: -3px; }
   /* Ungelesen: Punkt in Akzentfarbe plus fetter Titel, nicht nur Farbe. */
   a.event.unread::before {
-    content: ""; position: absolute; left: 2px; top: 14px;
-    width: 6px; height: 6px; border-radius: 50%; background: var(--accent);
+    content: ""; position: absolute; left: 2px; top: 15px;
+    width: 6px; height: 6px; border-radius: 50%; background: var(--accent-ink); /* 4,6:1, --accent war 2,8:1 */
   }
-  a.event.unread .title { font-weight: 600; }
-  .title { font-size: 13px; line-height: 1.35; color: var(--ink);
+  a.event.unread .title { font-weight: 700; color: var(--ink); }
+  /* Gelesene etwas zurücknehmen — im Dunkelmodus wirkt 400 sonst fast wie fett. */
+  .title { font-size: 15px; line-height: 1.35; color: var(--label);
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .message { font-size: 12px; line-height: 1.4; color: var(--muted); margin-top: 2px;
+  .message { font-size: 14px; line-height: 1.4; color: var(--muted); margin-top: 2px;
     display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-  .when { font-size: 10px; color: var(--muted-2); margin-top: 2px; }
+  .when { font-size: 14px; color: var(--muted-2); margin-top: 2px; }
 
   /* Wegdrücken: unaufdringlich, beim Überfahren der Zeile deutlicher. */
   button.x {
@@ -60,21 +62,23 @@
     color: var(--muted-2); font-size: 18px; line-height: 1; cursor: pointer;
   }
   li:hover button.x { color: var(--muted); }
-  button.x:hover { color: var(--accent-ink); background: var(--panel); }
+  button.x:hover { color: var(--accent-ink); background: var(--hover); }
   button.x:focus-visible { outline: 3px solid var(--mint); outline-offset: -3px; }
 
   button.link {
     border: none; background: none; padding: 0; cursor: pointer;
     font: inherit; color: var(--muted);
   }
-  button.link:hover { color: var(--accent-ink); }
+  button.link:hover, button.link.confirm { color: var(--accent-ink); }
+  button.link:disabled { opacity: 0.5; cursor: not-allowed; }
+  .error button.link { color: var(--accent-ink); text-decoration: underline; }
   button.link:focus-visible { outline: 3px solid var(--mint); outline-offset: 2px; }
 
-  .empty { font-size: 13px; color: var(--muted); padding: 18px 0; text-align: center; }
+  .empty { font-size: 14px; color: var(--muted); padding: 18px 0; text-align: center; }
 
   .foot {
     display: flex; justify-content: space-between; gap: 8px;
-    font-size: 11px; color: var(--muted-2);
+    font-size: 14px; color: var(--muted-2);
     margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--line);
   }
   .foot a { color: var(--muted); text-decoration: none; }
@@ -103,7 +107,7 @@
 
   <div class="foot">
     <span id="last"></span>
-    <span><button type="button" class="link" id="clearAll" hidden>Alle leeren</button><span id="sep" hidden> · </span><a href="#" id="optionsLink">Einstellungen</a></span>
+    <span><button type="button" class="link" id="clearAll" hidden>Alle entfernen</button><span id="sep" hidden> · </span><a href="#" id="optionsLink">Einstellungen</a></span>
   </div>
 
   <script src="popup.js"></script>

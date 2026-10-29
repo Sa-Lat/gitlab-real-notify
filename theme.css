@@ -56,6 +56,10 @@
 
   --ghost-line: #f0cfdd;
   --field-ink: #6b5872;
+  --field-line: #a97b92; /* Feldrand 3,5:1 auf --panel — --line (1,3:1) war kaum sichtbar */
+  --hover: #ffe4ef;      /* Zeilen-Hover; --panel auf --bg war 1,05:1 */
+  --ok-bg: #e6f5ee;
+  --ok-ink: #1f6f4e;     /* 5,4:1 auf --ok-bg */
   --btn-shadow: 0 10px 22px -10px rgba(240, 103, 155, 0.85);
 
   --icon-bg: linear-gradient(160deg, #ffd6e4, #ff9dbe);
@@ -92,6 +96,10 @@
 
     --ghost-line: #3e3049;
     --field-ink: #dccfe4;
+    --field-line: #857199; /* 3,4:1 auf --panel */
+    --hover: #3a2d46;
+    --ok-bg: #23352f;
+    --ok-ink: #86e3c0;     /* 8,5:1 auf --ok-bg */
     --btn-shadow: 0 12px 26px -10px rgba(255, 143, 181, 0.6);
 
     --icon-bg: linear-gradient(160deg, #ff8fb5, #e0709a);
@@ -116,7 +124,7 @@
 .pill:disabled { opacity: 0.55; cursor: progress; transform: none; }
 
 .eyebrow {
-  font-size: 11px;
+  font-size: 14px;
   letter-spacing: 0.18em;
   text-transform: uppercase;
   color: var(--muted);

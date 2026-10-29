@@ -12,60 +12,75 @@
     color: var(--ink);
     font-family: var(--font-body);
     display: flex; justify-content: center;
-    padding: 40px 24px 64px;
+    padding: 26px 24px 64px;
   }
-  main { width: 100%; max-width: 560px; padding: 28px 34px 32px; }
+  main { width: 100%; max-width: 560px; padding: 14px 34px 32px; }
 
+  /* Kopf bleibt beim Scrollen stehen — der einzige Speichern-Knopf ist sonst
+     weit weg von den Listen unten. */
   .top {
+    position: sticky; top: 0; z-index: 1;
+    background: var(--bg);
     display: flex; justify-content: space-between; align-items: flex-end;
     gap: 20px;
     border-bottom: 1px solid var(--track);
-    padding-bottom: 14px;
+    padding: 14px 0;
     margin-bottom: 20px;
   }
-  h1 { font-family: var(--font-display); font-weight: 800; font-size: 21px; }
-  .lede { margin-top: 3px; font-size: 12px; color: var(--muted); }
-  #save { padding: 10px 20px; font-size: 13px; flex-shrink: 0; }
+  .brand { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .brand .eyebrow { font-size: 14px; letter-spacing: 0.08em; font-weight: 700; }
+  h1 { font-family: var(--font-display); font-weight: 800; font-size: 24px; }
+  .lede { margin-top: 3px; font-size: 14px; color: var(--muted); }
+  #save { padding: 10px 20px; font-size: 14px; flex-shrink: 0; }
 
   .notiz {
     margin: 0 0 20px; padding: 10px 12px;
     border-radius: 12px; background: var(--tally-bg);
-    font-size: 12px; line-height: 1.55; color: var(--ink);
+    font-size: 14px; line-height: 1.55; color: var(--ink);
   }
-  .notiz.ok { background: transparent; border: 1px solid var(--line); color: var(--mint-ink); font-weight: 600; }
+  .notiz.ok { background: var(--ok-bg); color: var(--ok-ink); font-weight: 600; }
 
-  .grid { display: grid; gap: 20px; }
+  /* minmax(0,…): sonst wächst die Spalte mit dem längsten Pfad und die Seite scrollt seitwärts. */
+  .grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; }
   label {
     display: block;
-    font-size: 12px; font-weight: var(--label-weight); color: var(--label);
+    font-size: 14px; font-weight: var(--label-weight); color: var(--label);
     margin-bottom: 6px;
   }
   .field {
     display: flex; align-items: center;
     background: var(--panel);
-    border: 1px solid var(--line);
+    border: 1px solid var(--field-line);
     border-radius: 12px;
     padding: 9px 12px;
   }
-  .field:focus-within { border-color: var(--accent); }
+  /* Gleicher Mint-Ring wie bei allen anderen Bedienelementen. */
+  .field:focus-within { border-color: var(--accent-ink); box-shadow: 0 0 0 3px var(--mint); }
   .field input {
     flex: 1; min-width: 0;
     border: none; background: transparent; color: var(--field-ink);
-    font-family: var(--font-mono); font-size: 12px;
+    font-family: var(--font-mono); font-size: 14px;
   }
-  .field input:focus { outline: none; }
-  .feldhinweis { margin-top: 6px; font-size: 11px; line-height: 1.5; color: var(--muted); }
+  .field input:focus, .field select:focus { outline: none; }
+  .field input::placeholder { color: var(--muted-2); opacity: 1; }
+  .field select {
+    flex: 1; min-width: 0;
+    border: none; background: transparent; color: var(--field-ink);
+    font-family: var(--font-body); font-size: 14px; cursor: pointer;
+  }
+  .field select option { background: var(--panel); color: var(--ink); }
+  .feldhinweis { margin-top: 6px; font-size: 14px; line-height: 1.5; color: var(--muted); }
   .feldhinweis a { color: var(--accent-ink); }
 
   /* ── Neue MRs ─────────────────────────────────────── */
   .block { margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--track); }
   .switch {
     display: flex; align-items: center; gap: 10px; margin: 0;
-    font-family: var(--font-display); font-size: 15px; font-weight: 700; color: var(--ink);
+    font-family: var(--font-display); font-size: 16px; font-weight: 700; color: var(--ink);
     cursor: pointer;
   }
   .switch input, .rows input { width: 16px; height: 16px; accent-color: var(--accent-lo); cursor: pointer; }
-  #mrBox { display: grid; gap: 20px; margin-top: 18px; }
+  #mrBox { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; margin-top: 18px; }
 
   .rows { list-style: none; margin-bottom: 8px; }
   .rows:empty { display: none; }
@@ -75,27 +90,27 @@
   }
   .rows label {
     flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; margin: 0;
-    font-family: var(--font-mono); font-size: 12px; font-weight: 400; color: var(--field-ink);
+    font-family: var(--font-mono); font-size: 14px; font-weight: 400; color: var(--field-ink);
     cursor: pointer;
   }
   .rows label span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .rows li.off label span { text-decoration: line-through; color: var(--muted-2); }
-  .tag { font-size: 11px; color: var(--muted); flex-shrink: 0; }
+  .tag { font-size: 14px; color: var(--muted); flex-shrink: 0; }
   .tag.bad { color: var(--accent-ink); font-weight: 600; }
   button.x {
-    flex-shrink: 0; width: 26px; height: 26px;
+    flex-shrink: 0; width: 28px; height: 28px;
     border: none; border-radius: 8px; background: transparent;
-    color: var(--muted-2); font-size: 17px; line-height: 1; cursor: pointer;
+    color: var(--muted-2); font-size: 18px; line-height: 1; cursor: pointer;
   }
-  button.x:hover { color: var(--accent-ink); background: var(--panel); }
+  button.x:hover { color: var(--accent-ink); background: var(--hover); }
   button.x:focus-visible { outline: 3px solid var(--mint); outline-offset: -3px; }
 
   .add { display: flex; gap: 8px; }
   .add .field { flex: 1; }
   .add button {
     flex-shrink: 0; padding: 0 14px;
-    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
-    font-family: var(--font-body); font-size: 12px; font-weight: 600; color: var(--ink);
+    background: var(--panel); border: 1px solid var(--field-line); border-radius: 12px;
+    font-family: var(--font-body); font-size: 14px; font-weight: 600; color: var(--ink);
     cursor: pointer;
   }
   .add button:hover { border-color: var(--accent); color: var(--accent-ink); }
@@ -111,6 +126,15 @@
   <main>
     <div class="top">
       <div>
+        <div class="brand">
+          <div class="mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="var(--icon-ink)" stroke-width="2.2" stroke-linecap="round">
+              <path d="M8 5.5v13M16 7c0 5-8 4-8 9" />
+              <circle cx="8" cy="5" r="2.2" /><circle cx="8" cy="19" r="2.2" /><circle cx="16" cy="6.5" r="2.2" />
+            </svg>
+          </div>
+          <span class="eyebrow">GitLab Real Notify</span>
+        </div>
         <h1>Einstellungen</h1>
         <p class="lede">Benachrichtigungen wie bei „Participate“, nur im Browser</p>
       </div>
@@ -134,9 +158,20 @@
                  aria-describedby="tokenHint" />
         </div>
         <p class="feldhinweis" id="tokenHint">
-          Aus deinem eigenen Konto, Bereich <strong>read_api</strong> genügt — die Extension
+          Aus deinem eigenen Konto, Bereich <strong>read_api</strong> genügt — die Erweiterung
           liest nur.<span id="tokenLinkWrap" hidden> <a id="tokenLink" href="#" target="_blank" rel="noopener">Token in GitLab anlegen</a>.</span>
           Er bleibt lokal in diesem Browser.
+        </p>
+      </div>
+
+      <div>
+        <label for="interval">Wie oft prüfen</label>
+        <div class="field">
+          <select id="interval" aria-describedby="intervalHint"></select>
+        </div>
+        <p class="feldhinweis" id="intervalHint">
+          So schnell kommen Meldungen höchstens. Seltener heißt weniger Anfragen an GitLab;
+          der Aktualisieren-Knopf im Popup prüft jederzeit sofort.
         </p>
       </div>
     </div>
@@ -154,12 +189,12 @@
           <label for="nsInput">Gruppen und Projekte</label>
           <ul class="rows" id="nsList"></ul>
           <div class="add">
-            <div class="field"><input id="nsInput" spellcheck="false" placeholder="queo.web/aok/navigatoren"
+            <div class="field"><input id="nsInput" spellcheck="false" placeholder="z. B. example-group/team"
                                       aria-describedby="nsHint" /></div>
             <button type="button" id="nsAdd">Hinzufügen</button>
           </div>
           <p class="feldhinweis" id="nsHint">Pfad oder Link aus GitLab. Gruppen schließen Untergruppen ein.
-            Häkchen weg = pausiert.</p>
+            Ohne Häkchen: pausiert.</p>
         </div>
 
         <div>
@@ -167,7 +202,7 @@
           <ul class="rows" id="lblList"></ul>
           <div class="add">
             <div class="field"><input id="lblInput" list="lblSuggest" spellcheck="false"
-                                      placeholder="dependencies" aria-describedby="lblHint" /></div>
+                                      placeholder="z. B. dependencies" aria-describedby="lblHint" /></div>
             <button type="button" id="lblAdd">Hinzufügen</button>
           </div>
           <datalist id="lblSuggest"></datalist>

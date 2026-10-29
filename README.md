@@ -8,7 +8,8 @@ schicken würde. Vor allem:
 - dir wird etwas **zugewiesen**
 - jemand **bittet um dein Review**
 
-GitLab hat dafür keine API, also fragt die Extension jede Minute nach. Sie
+GitLab hat dafür keine API, also fragt die Extension regelmäßig nach —
+standardmäßig jede Minute, einstellbar bis alle 30 Minuten. Sie
 **liest nur** — sie kann in GitLab nichts ändern, und der Token braucht nur
 `read_api`.
 
@@ -64,16 +65,21 @@ Icon → **Optionen** bzw. **Einstellungen**).
 
 1. **GitLab-Adresse** eintragen, z. B. `https://gitlab.example.com`.
 2. **Token** einfügen.
-3. **Speichern & prüfen** klicken. Der Browser fragt einmal, ob die Extension
+3. Optional **Wie oft prüfen** wählen: jede Minute (Standard), alle 2, 5, 10,
+   15 oder 30 Minuten. Seltener heißt weniger Anfragen an GitLab, aber
+   Meldungen kommen entsprechend später. **↻** im Popup prüft jederzeit sofort.
+4. **Speichern & prüfen** klicken. Der Browser fragt einmal, ob die Extension
    auf diese Adresse zugreifen darf → **Zulassen**.
-4. Erscheint **„Verbunden als @dein-name“**, läuft es.
+5. Erscheint **„Verbunden als @dein-name“**, läuft es.
 
 Die erste Abfrage merkt sich nur den aktuellen Stand und meldet **absichtlich
-nichts**. Ab dann wird jede Minute geprüft.
+nichts**. Ab dann wird im eingestellten Takt geprüft. Den Takt kannst du
+jederzeit ändern; er gilt sofort nach dem Speichern, ohne dass etwas verloren
+geht.
 
 **Optional: Bei neuen MRs benachrichtigen.** Weiter unten auf derselben Seite
 einschalten, dann Gruppen oder Projekte eintragen (Pfad wie
-`queo.web/aok/navigatoren` oder einfach den Link aus GitLab) und Labels, die
+`example-group/team` oder einfach den Link aus GitLab) und Labels, die
 ignoriert werden sollen (z. B. `dependencies` für Renovate — beim Tippen kommen
 Vorschläge aus GitLab). Jeder Eintrag lässt sich per Häkchen pausieren oder
 mit × entfernen; der Hauptschalter schaltet alles ab, wenn es zu viel wird.
@@ -83,7 +89,8 @@ Nach **Speichern & prüfen** steht neben jedem Pfad „Gruppe“, „Projekt“ 
 ### 4. Ausprobieren
 
 Bitte eine Kollegin oder einen Kollegen, eins davon zu tun — die Meldung
-sollte innerhalb von 1–2 Minuten kommen:
+sollte spätestens nach einem Takt kommen (bei „jede Minute“ also nach 1–2
+Minuten; mit **↻** sofort):
 
 - in einem MR oder Issue **kommentieren**, in dem du schon kommentiert hast,
   das du angelegt hast oder in dem du Reviewer bist
@@ -103,7 +110,7 @@ Was du sehen solltest:
   - Klick auf eine Meldung → öffnet sie in GitLab und nimmt sie aus der Liste
   - **×** → nimmt sie nur aus der Liste
   - **Alle leeren** unten → leert die Liste
-  - **↻** oben rechts → sofort prüfen statt auf die nächste Minute zu warten
+  - **↻** oben rechts → sofort prüfen statt auf die nächste Abfrage zu warten
 - während jeder Abfrage wird das Icon kurz **lila**
 
 ### 5. Rückmeldung
@@ -124,7 +131,7 @@ Am hilfreichsten:
 | --- | --- |
 | Rotes **!** am Icon, „Token ungültig oder abgelaufen“ | Token falsch kopiert, widerrufen oder abgelaufen → neuen anlegen und in den Einstellungen eintragen |
 | „Kein Zugriff. Der Token braucht den Bereich read_api“ | Beim Token `read_api` vergessen |
-| „GitLab nicht erreichbar“ | Erscheint erst, wenn GitLab seit über 5 Minuten nicht antwortet (kurze Aussetzer nach dem Entsperren bleiben still). Adresse falsch, VPN aus, oder die Zugriffsfreigabe abgelehnt → erneut **Speichern & prüfen** und **Zulassen** |
+| „GitLab nicht erreichbar“ | Erscheint erst, wenn GitLab seit über 5 Minuten (bei langsamem Takt: zwei Abfragen lang) nicht antwortet; kurze Aussetzer nach dem Entsperren bleiben still. Adresse falsch, VPN aus, oder die Zugriffsfreigabe abgelehnt → erneut **Speichern & prüfen** und **Zulassen** |
 | Neue MRs: Pfad „nicht gefunden“ | Tippfehler, oder dein Konto sieht die Gruppe/das Projekt nicht |
 | Zahl am Icon steigt, aber keine Systembenachrichtigung | Benachrichtigungen fürs Betriebssystem blockiert: **Windows** Einstellungen → System → Benachrichtigungen → Chrome/Firefox an, „Nicht stören“ aus; **macOS** Systemeinstellungen → Mitteilungen → Chrome/Firefox |
 | Gar nichts, auch keine Zahl | Popup öffnen: Steht unten „vor … Min · @dein-name“? Wenn die Zeit nicht weiterläuft, auf **↻** klicken. Erste Abfrage meldet nie etwas (siehe oben). |
@@ -142,7 +149,8 @@ Gemeldet wird, was andere tun in MRs und Issues, die du **angelegt** hast, die
 dir **zugewiesen** sind, in denen du **Reviewer** bist, in denen du
 **kommentiert** hast oder in denen du **erwähnt** wurdest:
 
-- neue Kommentare
+- neue Kommentare — mehrere auf einmal im selben MR/Issue (z. B. ein
+  abgeschicktes Review) als **eine** Meldung
 - neue Commits, Freigaben, „ready“, Review-Anfragen, Zuweisungen
 - gemergt, geschlossen, wieder geöffnet
 - alle neuen GitLab-Todos (z. B. fehlgeschlagene Pipeline, Freigabe nötig)
@@ -202,10 +210,14 @@ Code-Änderungen auf `chrome://extensions` neu laden; für Firefox
 npx web-ext sign --channel=unlisted --source-dir dist/firefox
 ```
 
-Die Add-on-ID `gitlab-real-notify@queo.de` danach nicht mehr ändern.
+Die Add-on-ID (GUID in `firefox.py`) danach nicht mehr ändern — Firefox
+erkennt Updates und gespeicherte Einstellungen daran.
 
-### Abfragen pro Minute
+### Abfragen pro Durchlauf
 
+Ein Durchlauf pro eingestelltem Takt (`settings.interval`, erlaubt sind die
+Werte in `INTERVALS` in `background.js`: 1, 2, 5, 10, 15, 30 Minuten; Standard
+1). Der Takt ist ein `chrome.alarms`-Alarm, den Start und Speichern neu setzen.
 Alle `GET`, Header `PRIVATE-TOKEN`:
 
 1. `/todos?state=pending`
@@ -216,7 +228,10 @@ Alle `GET`, Header `PRIVATE-TOKEN`:
 6. pro tatsächlich geändertem MR/Issue: `…/:iid/notes?sort=desc&order_by=created_at&per_page=50`
 7. nur mit „Neue MRs“: pro aktivem Pfad `/{groups|projects}/:id/merge_requests?state=opened&updated_after=…`
 
-Typisch 10–20 Anfragen, fast alle mit leerer Antwort. `/user` und das
+Typisch 10–20 Anfragen pro Durchlauf, fast alle mit leerer Antwort — bei
+„jede Minute“ also 10–20 pro Minute, bei „alle 5 Minuten“ ein Fünftel davon.
+Die Anzahl pro Durchlauf hängt nicht vom Takt ab, weil `updated_after` nur
+Geändertes liefert. `/user` und das
 Auflösen der Pfade (`/groups/:pfad`, sonst `/projects/:pfad`) beim Speichern;
 Labels (`/…/:id/labels`) beim Öffnen der Einstellungen. Der Events-Rückblick
 reicht bis 2 Tage vor die letzte erfolgreiche Abfrage (höchstens 30 Tage).
@@ -236,9 +251,9 @@ reicht bis 2 Tage vor die letzte erfolgreiche Abfrage (höchstens 30 Tage).
 - **Nur Text.** Notizen sind Markdown mit HTML; `bodyText()` macht daraus
   Klartext. Titel bleiben unangetastet.
 - **429** von GitLab: Pause laut `Retry-After` (mindestens 60 s).
-- **Netzaussetzer** (fetch wirft, 5xx) innerhalb von 5 Minuten nach dem
-  letzten Erfolg bleiben still; der Minuten-Alarm ist der Retry. 401/403/429
-  werden sofort angezeigt.
+- **Netzaussetzer** (fetch wirft, 5xx) bleiben still, solange der letzte
+  Erfolg weniger als 5 Minuten bzw. zwei Takte (+30 s) her ist; der Alarm ist
+  der Retry. 401/403/429 werden sofort angezeigt.
 - **Speichern** verwirft den Stand nur bei anderer Adresse oder anderem Konto.
 - **Neue MRs:** Drafts kommen nie in `newMr.seen`, damit „Ready“ später als neu
   auffällt; bekannte MRs werden nach 180 Tagen ohne Aktivität vergessen.

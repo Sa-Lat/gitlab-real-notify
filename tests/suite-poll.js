@@ -72,16 +72,16 @@ RN.suite("Neue Kommentare im beobachteten Thread", async (t) => {
   ];
   await h.api.poll();
   const msgs = shown(h).map((n) => n.message);
-  t.eq(msgs.length, 3, "Drei Meldungen", msgs);
-  t.ok(msgs.includes("Anna: Sieht gut aus, aber bitte Tests"), "Kommentar von Anna, Leerraum geglättet", msgs);
+  t.eq(msgs.length, 2, "Zwei Meldungen: Commits einzeln, Kommentare gebündelt", msgs);
+  t.ok(msgs.includes("Anna: 2 neue Kommentare · Sieht gut aus, aber bitte Tests"),
+    "Annas zwei Kommentare in einer Meldung, erster als Vorschau, Leerraum geglättet", msgs);
   t.ok(msgs.some((m) => m.startsWith("Anna added 2 commits")), "Neue Commits gemeldet", msgs);
-  t.ok(msgs.includes("Anna: @latte ist nicht gemeint"), "Ähnlicher Name ist keine Erwähnung", msgs);
   t.ok(!msgs.some((m) => m.includes("Mache ich")), "Eigener Kommentar nicht gemeldet");
-  t.ok(!msgs.some((m) => m.includes("@lat schau")), "Erwähnung nicht doppelt (kommt als Todo)");
+  t.ok(!msgs.some((m) => m.includes("@lat schau")), "Erwähnung nicht doppelt (kommt als Todo); @latte zählt mit");
   t.ok(!msgs.some((m) => m.includes("description")), "Beschreibungsänderung nicht gemeldet");
   t.eq(shown(h)[0].title, "!5 Login reparieren", "Titel mit MR-Referenz");
-  t.eq(h.state.history[0].url, "https://gitlab.example.test/g/p/-/merge_requests/5#note_16", "Link springt zur Notiz");
-  t.eq(h.badge.text, "3", "Badge zählt ungelesene");
+  t.eq(h.state.history[0].url, "https://gitlab.example.test/g/p/-/merge_requests/5#note_11", "Link springt zum ersten neuen Kommentar");
+  t.eq(h.badge.text, "2", "Badge zählt ungelesene");
 
   // Nächste Minute: MR liegt noch im Überlappungsfenster, darf aber nichts doppelt melden.
   for (const k of Object.keys(h.notes)) delete h.notes[k];
@@ -91,11 +91,30 @@ RN.suite("Neue Kommentare im beobachteten Thread", async (t) => {
   h.dispose();
 });
 
+RN.suite("Batch-Review: Kommentare pro MR gebündelt", async (t) => {
+  const h = await RN.loadBackground();
+  h.gl.mrs.push(mr(h, 8315, { title: "Standardwerte", author: h.me }));
+  await h.warm();
+  const ben = { id: 3, username: "ben", name: "Ben" };
+  h.gl.mrs[0].updated_at = h.iso();
+  h.gl.notes["mr:10:8315"] = [
+    note(h, 31, h.other, "Fehlt hier der Field-Name?"),
+    note(h, 32, h.other, "Hier nur der Client?"),
+    note(h, 33, ben, "Und die Query?")
+  ];
+  await h.api.poll();
+  const n = shown(h);
+  t.eq(n.length, 1, "Drei Kommentare -> eine Meldung");
+  t.eq(n[0] && n[0].message, "Anna, Ben: 3 neue Kommentare · Fehlt hier der Field-Name?", "Alle Autoren, Anzahl, erster Kommentar");
+  t.eq(h.state.history.length, 1, "Ein Eintrag im Verlauf");
+  h.dispose();
+});
+
 RN.suite("Kein HTML und Markdown im Text", async (t) => {
   const h = await RN.loadBackground();
   const txt = (s) => h.api.plain(h.api.bodyText(s), 500);
-  t.eq(txt("added 1 commit\n\n<ul><li>1134a182 - fix #MGPMPNAV-7238: address MR review feedback</li></ul>\n\n[Compare with previous version](/g/p/-/merge_requests/8379/diffs?diff_id=1&start_sha=2)"),
-    "added 1 commit · 1134a182 - fix #MGPMPNAV-7238: address MR review feedback",
+  t.eq(txt("added 1 commit\n\n<ul><li>1134a182 - fix #EXAMPLE-7238: address MR review feedback</li></ul>\n\n[Compare with previous version](/g/p/-/merge_requests/8379/diffs?diff_id=1&start_sha=2)"),
+    "added 1 commit · 1134a182 - fix #EXAMPLE-7238: address MR review feedback",
     "Commit-Systemnotiz wie aus GitLab");
   t.eq(txt("added 2 commits\n\n<ul><li>aaa - eins</li><li>bbb - zwei</li></ul>"),
     "added 2 commits · aaa - eins · bbb - zwei", "Mehrere Commits");
@@ -165,13 +184,15 @@ RN.suite("Sammelmeldung nach Standby", async (t) => {
   await h.warm();
   h.advance(8 * 3600000);
   h.gl.mrs[0].updated_at = h.iso();
-  h.gl.notes["mr:10:5"] = [1, 2, 3, 4, 5, 6, 7].map((i) => note(h, 100 + i, h.other, "Nr " + i, { created_at: h.iso(h.now() - (8 - i) * 1000) }));
+  // Systemnotizen, weil Kommentare pro MR gebündelt würden.
+  h.gl.notes["mr:10:5"] = [1, 2, 3, 4, 5, 6, 7].map((i) => note(h, 100 + i, h.other, "added 1 commit\n\nNr " + i,
+    { system: true, created_at: h.iso(h.now() - (8 - i) * 1000) }));
   await h.api.poll();
   const n = shown(h);
   t.eq(n.length, 1, "Eine Sammelmeldung statt sieben");
   t.eq(n[0] && n[0].title, "7 neue Ereignisse in GitLab", "Titel nennt die Zahl");
   t.eq(h.state.history.length, 7, "Verlauf hat alle sieben");
-  t.eq(h.state.history[0].message, "Anna: Nr 7", "Neueste zuerst");
+  t.eq(h.state.history[0].message, "Anna added 1 commit Nr 7", "Neueste zuerst");
   t.eq(h.badge.text, "7", "Badge 7");
   h.dispose();
 });

@@ -1,7 +1,7 @@
 // Neue MRs in ausgewählten Gruppen/Projekten, dazu Abwesenheit und Netzaussetzer.
 // Nutzt mr() aus suite-poll.js.
 
-const NAV = "queo.web/aok/navigatoren";
+const NAV = "example-group/team";
 
 function newMrSetup(opts) {
   const o = opts || {};
@@ -21,7 +21,7 @@ function newMrSetup(opts) {
   });
 }
 
-// MR im Navigatoren-Projekt; id muss eindeutig sein (GitLab-weite MR-ID).
+// MR im Projekt NAV/app; id muss eindeutig sein (GitLab-weite MR-ID).
 function navMr(h, iid, extra) {
   return mr(h, iid, Object.assign({ id: 5000 + iid, labels: [], reviewers: [], assignees: [] }, extra));
 }
@@ -182,6 +182,36 @@ RN.suite("Abwesenheit", async (t) => {
   for (let i = 0; i < 210; i++) many.push({ title: "x" + i, message: "", url: null });
   await h.api.notify(many, h.now());
   t.eq(h.state.history.length, 200, "Verlauf hält 200 Einträge");
+  h.dispose();
+});
+
+RN.suite("Abfrage-Takt", async (t) => {
+  const h = await newMrSetup();
+  const i = h.api.intervalOf;
+  t.eq(i({}), 1, "Ohne Einstellung: jede Minute");
+  t.eq(i({ interval: 5 }), 5, "Erlaubter Wert bleibt");
+  t.eq(i({ interval: "10" }), 10, "Zahl als Text geht auch");
+  t.eq(i({ interval: 3 }), 1, "Nicht vorgesehener Wert -> Standard");
+  t.eq(i({ interval: 0.1 }), 1, "Zu schnell -> Standard");
+
+  h.state.settings.interval = 5;
+  await h.api.start();
+  t.eq(h.alarms.poll && h.alarms.poll.periodInMinutes, 5, "Start stellt den Alarm auf den gespeicherten Takt");
+
+  await h.api.saveSettings({ url: "https://gitlab.example.test", token: "", interval: 10 });
+  t.eq(h.state.settings.interval, 10, "Speichern übernimmt den Takt");
+  t.eq(h.alarms.poll.periodInMinutes, 10, "und stellt den Alarm sofort um");
+  await h.api.saveSettings({ url: "https://gitlab.example.test", token: "" });
+  t.eq(h.state.settings.interval, 10, "Ohne Angabe bleibt der Takt");
+
+  // Bei 10 Minuten sind 15 Minuten ohne Antwort noch kein Fehler.
+  h.gl.fail = { network: true };
+  h.advance(15 * 60000);
+  await h.api.poll();
+  t.eq(h.state.error, null, "Langsamer Takt: Aussetzer bleibt länger still");
+  h.advance(10 * 60000);
+  await h.api.poll();
+  t.ok(/nicht erreichbar/.test(h.state.error || ""), "Nach zwei verpassten Abfragen: Fehler", h.state.error);
   h.dispose();
 });
 

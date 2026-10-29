@@ -7,6 +7,11 @@ const tokenEl = document.getElementById("token");
 const notiz = document.getElementById("notiz");
 const saveBtn = document.getElementById("save");
 const mrOn = document.getElementById("mrOn");
+const intervalEl = document.getElementById("interval");
+
+function minutes(n) {
+  return n === 1 ? "jede Minute" : "alle " + n + " Minuten";
+}
 
 // Neue MRs: Listen mit an/aus pro Eintrag. Gespeichert wird mit „Speichern & prüfen“.
 let namespaces = [];   // [{ path, on }]
@@ -18,7 +23,7 @@ function cleanUrl(s) {
   return /^https:\/\/[^/\s]+/i.test(u) ? u : null;
 }
 
-// „https://gitlab…/queo.web/aok/navigatoren/-/merge_requests“ -> „queo.web/aok/navigatoren“
+// „https://gitlab.example.com/example-group/team/-/merge_requests“ -> „example-group/team“
 function cleanPath(s) {
   return s.trim()
     .replace(/^https?:\/\/[^/]+/i, "")
@@ -39,6 +44,12 @@ function say(text, ok) {
   notiz.textContent = text;
   notiz.classList.toggle("ok", !!ok);
   notiz.hidden = false;
+}
+
+// Änderungen gelten erst nach „Speichern & prüfen“ — das soll man sehen.
+let loaded = false;
+function markDirty() {
+  if (loaded && !saveBtn.disabled) say("Noch nicht gespeichert — oben auf „Speichern & prüfen“ klicken.");
 }
 
 // Eine Zeilenliste: Häkchen schaltet an/aus, × entfernt. tagOf liefert den
@@ -70,9 +81,11 @@ function renderRows(listEl, items, key, tagOf) {
     x.type = "button";
     x.className = "x";
     x.textContent = "×";
+    x.title = "Entfernen";
     x.setAttribute("aria-label", item[key] + " entfernen");
     x.addEventListener("click", () => {
       items.splice(i, 1);
+      markDirty();
       renderRows(listEl, items, key, tagOf);
       // Fokus nicht ins Leere fallen lassen: nächste Zeile, sonst das Eingabefeld.
       const rest = listEl.querySelectorAll("button.x");
@@ -98,7 +111,7 @@ function renderMr() {
 function wireAdd(inputId, buttonId, add) {
   const input = document.getElementById(inputId);
   const go = () => {
-    if (add(input.value)) { input.value = ""; renderMr(); }
+    if (add(input.value)) { input.value = ""; renderMr(); markDirty(); }
     input.focus();
   };
   document.getElementById(buttonId).addEventListener("click", go);
@@ -137,8 +150,16 @@ async function loadLabels() {
 async function load() {
   const status = await chrome.runtime.sendMessage({ type: "status" });
   urlEl.value = status.url;
-  tokenEl.placeholder = status.hasToken ? "gespeichert — leer lassen, um ihn zu behalten" : "glpat-…";
+  tokenEl.placeholder = status.hasToken ? "gespeichert – leer lassen zum Behalten" : "glpat-…";
   setTokenLink();
+  intervalEl.textContent = "";
+  for (const n of status.intervals) {
+    const o = document.createElement("option");
+    o.value = String(n);
+    o.textContent = minutes(n);
+    intervalEl.appendChild(o);
+  }
+  intervalEl.value = String(status.interval);
   mrOn.checked = !!status.newMrs.enabled;
   namespaces = status.newMrs.namespaces.map((n) => Object.assign({}, n));
   ignoreLabels = status.newMrs.ignoreLabels.map((l) => Object.assign({}, l));
@@ -147,9 +168,17 @@ async function load() {
   if (status.me) say("Verbunden als @" + status.me.username, true);
   else if (status.error) say(status.error);
   loadLabels();
+  loaded = true;
 }
 
 urlEl.addEventListener("input", setTokenLink);
+// Tippen in die Hinzufügen-Felder zählt nicht — das wird erst mit „Hinzufügen“ eine Änderung.
+document.querySelector("main").addEventListener("input", (e) => {
+  if (!e.target.closest(".add")) markDirty();
+});
+document.querySelector("main").addEventListener("change", (e) => {
+  if (!e.target.closest(".add")) markDirty();
+});
 
 saveBtn.addEventListener("click", async () => {
   const url = cleanUrl(urlEl.value);
@@ -175,16 +204,17 @@ saveBtn.addEventListener("click", async () => {
   say("Prüfe die Verbindung …", true);
   const res = await chrome.runtime.sendMessage({
     type: "save",
-    settings: { url, token: tokenEl.value, newMrs: { enabled: mrOn.checked, namespaces, ignoreLabels } }
+    settings: { url, token: tokenEl.value, interval: Number(intervalEl.value),
+      newMrs: { enabled: mrOn.checked, namespaces, ignoreLabels } }
   });
   saveBtn.disabled = false;
   tokenEl.value = "";
   resolved = (res && res.nsResolved) || {};
   renderMr();
   if (res && res.ok) {
-    tokenEl.placeholder = "gespeichert — leer lassen, um ihn zu behalten";
+    tokenEl.placeholder = "gespeichert – leer lassen zum Behalten";
     const missing = namespaces.filter((n) => resolved[n.path] === null).map((n) => n.path);
-    say("Verbunden als @" + res.me.username + ". Ab jetzt wird jede Minute geprüft." +
+    say("Verbunden als @" + res.me.username + ". Ab jetzt wird " + minutes(Number(intervalEl.value)) + " geprüft." +
       (missing.length ? " Nicht gefunden: " + missing.join(", ") + " — Tippfehler oder kein Zugriff?" : ""), !missing.length);
     loadLabels();
   } else {

@@ -17,6 +17,10 @@
 // ergänzen, auch keinen bequemen — die Suite „Nur lesen“ wacht darüber.
 
 const POLL = "poll";
+// Wählbare Abfrage-Abstände in Minuten (Einstellungen). Unter 1 Minute lassen
+// Chrome und Firefox wiederkehrende Alarme nicht zuverlässig zu.
+const INTERVALS = [1, 2, 5, 10, 15, 30];
+const DEFAULT_INTERVAL = 1;
 const DAY = 86400000;
 // shortcut: Threads, in denen du nur kommentiert hast, fallen nach 30 Tagen
 // ohne Aktivität aus der Beobachtung. Hochsetzen, wenn alte Threads fehlen —
@@ -25,7 +29,8 @@ const WATCH_DAYS = 30;
 const OVERLAP_MS = 2 * 60000; // Uhrenversatz zwischen Rechner und GitLab abfangen
 const HISTORY_MAX = 200; // ein Tag Abwesenheit mit viel Betrieb passt rein
 // Kurz nach dem Entsperren steht das Netz (WLAN, VPN) oft noch nicht. Solche
-// Aussetzer zeigen wir erst, wenn der letzte Erfolg so lange her ist.
+// Aussetzer zeigen wir erst, wenn der letzte Erfolg so lange her ist —
+// mindestens 5 Minuten, bei langsamem Takt zwei verpasste Abfragen.
 const NET_GRACE_MS = 5 * 60000;
 // shortcut: bekannte MRs ohne Aktivität seit 180 Tagen werden vergessen;
 // tauchen sie danach wieder auf, kommen sie einmal als „neu“.
@@ -163,6 +168,17 @@ function noteEvent(note, item) {
   };
 }
 
+// Mehrere neue Kommentare in einem MR/Issue (typisch: ein abgeschicktes Review
+// mit vielen Anmerkungen) -> eine Meldung, Link auf den ersten.
+function commentsEvent(notes, item) {
+  const who = [...new Set(notes.map((n) => n.author.name))].join(", ");
+  return {
+    title: refOf(item.kind, item.iid) + " " + plain(item.title, 80),
+    message: who + ": " + notes.length + " neue Kommentare · " + plain(bodyText(notes[0].body), 120),
+    url: safeUrl(item.url && item.url + "#note_" + notes[0].id)
+  };
+}
+
 function todoEvent(todo) {
   const kind = kindOf(todo.target_type);
   const t = todo.target || {};
@@ -206,7 +222,7 @@ function errorText(e) {
 
 // ---------- Neue MRs in ausgewählten Gruppen/Projekten ----------
 
-// Pfad wie „queo.web/aok/navigatoren“ -> Gruppe oder Projekt. null = gibt es
+// Pfad wie „example-group/team“ -> Gruppe oder Projekt. null = gibt es
 // nicht (oder kein Zugriff); andere Fehler gehen nach oben.
 async function resolveNamespace(settings, path) {
   for (const kind of ["group", "project"]) {
@@ -365,9 +381,15 @@ async function pollNow() {
       const path = "projects/" + it.pid + (kind === "mr" ? "/merge_requests/" : "/issues/") + it.iid + "/notes";
       const notes = (await get(settings, path, { sort: "desc", order_by: "created_at", per_page: 50 })).data;
       const fresh = notes.filter((n) => it.noteId ? n.id > it.noteId : Date.parse(n.created_at) > sinceMs);
+      // Systemnotizen (Commits, Freigabe …) einzeln, Kommentare gebündelt.
+      const comments = [];
       for (const n of fresh.sort((a, b) => a.id - b.id)) { // IDs steigen, Zeitstempel können gleich sein
-        if (relevantNote(n, me)) events.push(noteEvent(n, it));
+        if (!relevantNote(n, me)) continue;
+        if (n.system) events.push(noteEvent(n, it));
+        else comments.push(n);
       }
+      if (comments.length === 1) events.push(noteEvent(comments[0], it));
+      else if (comments.length > 1) events.push(commentsEvent(comments, it));
       if (notes.length) it.noteId = Math.max(it.noteId || 0, ...notes.map((n) => n.id));
     }
 
@@ -391,7 +413,8 @@ async function pollNow() {
   } catch (e) {
     // Netz weg oder Server-Schluckauf kurz nach einem Erfolg: still bleiben,
     // der nächste Minuten-Alarm versucht es wieder und holt alles nach.
-    if ((!e.status || e.status >= 500) && s.lastPoll && started - s.lastPoll < NET_GRACE_MS) {
+    const grace = Math.max(NET_GRACE_MS, 2 * intervalOf(settings) * 60000 + 30000);
+    if ((!e.status || e.status >= 500) && s.lastPoll && started - s.lastPoll < grace) {
       return { ok: false, error: null, transient: true };
     }
     const error = errorText(e);
@@ -497,6 +520,7 @@ async function saveSettings(input) {
   const settings = {
     url: String(input.url || "").trim().replace(/\/+$/, ""),
     token: String(input.token || "").trim() || old.token || "",
+    interval: intervalOf({ interval: input.interval != null ? input.interval : old.interval }),
     newMrs: {
       enabled: !!nm.enabled,
       namespaces: cleanList(nm.namespaces, "path"),
@@ -518,13 +542,26 @@ async function saveSettings(input) {
     { settings, nsResolved, error: null, pauseUntil: 0 },
     sameAccount ? {} : { me: null, items: {}, todoIds: [], lastPoll: null, newMr: { base: {}, seen: {} } }
   )));
+  await armAlarm(settings);
   return Object.assign(await poll(), { nsResolved });
 }
 
 // ---------- Verdrahtung ----------
 
+// Nur Werte aus INTERVALS; alles andere (alt, kaputt, fehlt) -> Standard.
+function intervalOf(settings) {
+  const n = Number(settings && settings.interval);
+  return INTERVALS.includes(n) ? n : DEFAULT_INTERVAL;
+}
+
+// create() ersetzt einen bestehenden Alarm gleichen Namens — neuer Takt gilt sofort.
+async function armAlarm(settings) {
+  await chrome.alarms.create(POLL, { periodInMinutes: intervalOf(settings) });
+}
+
 async function start() {
-  await chrome.alarms.create(POLL, { periodInMinutes: 1 });
+  const { settings } = await chrome.storage.local.get("settings");
+  await armAlarm(settings);
   await poll();
 }
 
@@ -553,6 +590,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       sendResponse({
         url: settings.url,
         hasToken: !!settings.token, // der Token selbst verlässt den Service Worker nicht
+        interval: intervalOf(settings), intervals: INTERVALS,
         newMrs: settings.newMrs || { enabled: false, namespaces: [], ignoreLabels: [] },
         nsResolved: s.nsResolved || {},
         me: s.me, lastPoll: s.lastPoll, error: s.error, history: s.history || []
