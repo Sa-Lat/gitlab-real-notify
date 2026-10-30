@@ -11,6 +11,15 @@ filter.
 Polls the GitLab REST API, needs only a personal token with `read_api` and
 never writes anything. No backend, no build step for Chrome.
 
+## Screenshots
+
+<p>
+  <img src=".github/screenshots/popup.png" alt="Popup with recent notifications (light)" width="380">
+  <img src=".github/screenshots/popup-dark.png" alt="Popup with recent notifications (dark)" width="380">
+</p>
+
+<img src=".github/screenshots/settings.png" alt="Settings page with URL, token, interval, language and new-MR options" width="720">
+
 ## Installation
 
 > **Not published yet.** There is no official build in the Chrome Web Store or
