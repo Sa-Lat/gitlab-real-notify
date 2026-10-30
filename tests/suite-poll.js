@@ -72,16 +72,15 @@ RN.suite("Neue Kommentare im beobachteten Thread", async (t) => {
   ];
   await h.api.poll();
   const msgs = shown(h).map((n) => n.message);
-  t.eq(msgs.length, 2, "Zwei Meldungen: Commits einzeln, Kommentare gebündelt", msgs);
-  t.ok(msgs.includes("Anna: 2 new comments · Sieht gut aus, aber bitte Tests"),
-    "Annas zwei Kommentare in einer Meldung, erster als Vorschau, Leerraum geglättet", msgs);
-  t.ok(msgs.some((m) => m.startsWith("Anna added 2 commits")), "Neue Commits gemeldet", msgs);
+  t.eq(msgs.length, 1, "Eine Meldung für den MR", msgs);
+  t.eq(msgs[0], "Anna: 2 new comments · Anna added 2 commits * abc",
+    "Kommentare (zwei, @latte zählt mit) und Commits zusammen", msgs);
   t.ok(!msgs.some((m) => m.includes("Mache ich")), "Eigener Kommentar nicht gemeldet");
-  t.ok(!msgs.some((m) => m.includes("@lat schau")), "Erwähnung nicht doppelt (kommt als Todo); @latte zählt mit");
+  t.ok(!msgs.some((m) => m.includes("@lat schau")), "Erwähnung nicht doppelt (kommt als Todo)");
   t.ok(!msgs.some((m) => m.includes("description")), "Beschreibungsänderung nicht gemeldet");
   t.eq(shown(h)[0].title, "!5 Login reparieren", "Titel mit MR-Referenz");
   t.eq(h.state.history[0].url, "https://gitlab.example.test/g/p/-/merge_requests/5#note_11", "Link springt zum ersten neuen Kommentar");
-  t.eq(h.badge.text, "2", "Badge zählt ungelesene");
+  t.eq(h.badge.text, "1", "Badge zählt ungelesene");
 
   // Nächste Minute: MR liegt noch im Überlappungsfenster, darf aber nichts doppelt melden.
   for (const k of Object.keys(h.notes)) delete h.notes[k];
@@ -177,22 +176,114 @@ RN.suite("Statuswechsel", async (t) => {
   h.dispose();
 });
 
+RN.suite("Freigabe und Merge in einer Abfrage", async (t) => {
+  const ben = { id: 3, username: "ben", name: "Ben" };
+  {
+    const h = await RN.loadBackground();
+    h.gl.mrs.push(mr(h, 5, { author: h.me }));
+    await h.warm();
+    Object.assign(h.gl.mrs[0], { state: "merged", merge_user: h.other, updated_at: h.iso() });
+    h.gl.notes["mr:10:5"] = [
+      note(h, 41, ben, "approved this merge request", { system: true }),
+      note(h, 42, h.other, "approved this merge request", { system: true })
+    ];
+    await h.api.poll();
+    const msgs = shown(h).map((n) => n.message);
+    t.eq(msgs.length, 1, "Eine Meldung statt drei", msgs);
+    t.eq(msgs[0], "Merged by Anna · approved by Ben", "Merge nennt die anderen Freigebenden, nicht den Mergenden");
+    h.dispose();
+  }
+  {
+    const h = await RN.loadBackground();
+    h.gl.mrs.push(mr(h, 5, { author: h.me }));
+    await h.warm();
+    h.gl.mrs[0].updated_at = h.iso();
+    h.gl.notes["mr:10:5"] = [note(h, 43, ben, "approved this merge request", { system: true })];
+    await h.api.poll();
+    t.eq(shown(h).map((n) => n.message).join(), "Ben approved this merge request", "Freigabe ohne Merge kommt wie bisher");
+    h.dispose();
+  }
+  {
+    const h = await RN.loadBackground();
+    h.gl.mrs.push(mr(h, 5, { author: h.me }));
+    await h.warm();
+    Object.assign(h.gl.mrs[0], { state: "merged", merge_user: h.me, updated_at: h.iso() });
+    h.gl.notes["mr:10:5"] = [note(h, 44, ben, "approved this merge request", { system: true })];
+    await h.api.poll();
+    t.eq(shown(h).length, 0, "Selbst gemergt: auch die Freigabe davor nicht melden");
+    h.dispose();
+  }
+});
+
+RN.suite("Eine Meldung pro MR und Abfrage", async (t) => {
+  const ben = { id: 3, username: "ben", name: "Ben" };
+  {
+    const h = await RN.loadBackground();
+    h.gl.mrs.push(mr(h, 5, { author: h.me }));
+    await h.warm();
+    Object.assign(h.gl.mrs[0], { state: "merged", merge_user: h.other, updated_at: h.iso() });
+    h.gl.notes["mr:10:5"] = [
+      note(h, 51, ben, "added 1 commit\n\n* aaa", { system: true }),
+      note(h, 52, ben, "added 2 commits\n\n* bbb", { system: true }),
+      note(h, 53, h.other, "Sieht gut aus"),
+      note(h, 54, ben, "approved this merge request", { system: true })
+    ];
+    await h.api.poll();
+    const msgs = shown(h).map((n) => n.message);
+    t.eq(msgs.length, 1, "Merge, Kommentar, Pushes und Freigabe: eine Meldung", msgs);
+    t.eq(msgs[0], "Merged by Anna · approved by Ben · Anna: Sieht gut aus · Ben added 3 commits",
+      "Status zuerst, dann Kommentar, dann Commits zusammengezählt");
+    t.eq(h.state.history[0].url, "https://gitlab.example.test/g/p/-/merge_requests/5#note_53", "Link auf den Kommentar");
+    h.dispose();
+  }
+  {
+    const h = await RN.loadBackground();
+    h.gl.mrs.push(mr(h, 5, { author: h.me }));
+    await h.warm();
+    h.gl.mrs[0].updated_at = h.iso();
+    h.gl.notes["mr:10:5"] = [
+      note(h, 61, ben, "added 1 commit\n\n* aaa", { system: true }),
+      note(h, 62, ben, "added 1 commit\n\n* bbb", { system: true })
+    ];
+    await h.api.poll();
+    t.eq(shown(h).map((n) => n.message).join(), "Ben added 2 commits", "Zwei Pushes -> zusammengezählt");
+    t.eq(h.state.history[0].url, "https://gitlab.example.test/g/p/-/merge_requests/5#note_61", "Link auf den ersten Push");
+    h.dispose();
+  }
+  {
+    const h = await RN.loadBackground({ state: { settings: { url: "https://gitlab.example.test", token: "glpat-test", lang: "de" } } });
+    h.gl.mrs.push(mr(h, 5, { author: h.me }));
+    await h.warm();
+    h.gl.mrs[0].updated_at = h.iso();
+    h.gl.notes["mr:10:5"] = [
+      note(h, 71, ben, "added 1 commit", { system: true }),
+      note(h, 72, ben, "added 4 commits", { system: true }),
+      note(h, 73, h.other, "Eins"),
+      note(h, 74, h.other, "Zwei")
+    ];
+    await h.api.poll();
+    t.eq(shown(h).map((n) => n.message).join(), "Anna: 2 neue Kommentare · Ben hat 5 Commits hinzugefügt", "Auf Deutsch");
+    h.dispose();
+  }
+});
+
 RN.suite("Sammelmeldung nach Standby", async (t) => {
   const h = await RN.loadBackground();
-  commentedOn(h, 5);
-  h.gl.mrs.push(mr(h, 5));
+  // Sieben verschiedene MRs, weil alles zum selben MR eine Meldung würde.
+  const iids = [1, 2, 3, 4, 5, 6, 7];
+  for (const i of iids) h.gl.mrs.push(mr(h, i, { author: h.me }));
   await h.warm();
   h.advance(8 * 3600000);
-  h.gl.mrs[0].updated_at = h.iso();
-  // Systemnotizen, weil Kommentare pro MR gebündelt würden.
-  h.gl.notes["mr:10:5"] = [1, 2, 3, 4, 5, 6, 7].map((i) => note(h, 100 + i, h.other, "added 1 commit\n\nNr " + i,
-    { system: true, created_at: h.iso(h.now() - (8 - i) * 1000) }));
+  for (const x of h.gl.mrs) {
+    x.updated_at = h.iso();
+    h.gl.notes["mr:10:" + x.iid] = [note(h, 100 + x.iid, h.other, "Nr " + x.iid)];
+  }
   await h.api.poll();
   const n = shown(h);
   t.eq(n.length, 1, "Eine Sammelmeldung statt sieben");
   t.eq(n[0] && n[0].title, "7 new events in GitLab", "Titel nennt die Zahl");
   t.eq(h.state.history.length, 7, "Verlauf hat alle sieben");
-  t.eq(h.state.history[0].message, "Anna added 1 commit Nr 7", "Neueste zuerst");
+  t.ok(h.state.history.every((e) => /^Anna: Nr \d$/.test(e.message)), "Jede einzeln im Verlauf");
   t.eq(h.badge.text, "7", "Badge 7");
   h.dispose();
 });

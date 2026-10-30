@@ -5,6 +5,17 @@ anheben: größere neue Funktion → Minor (0.**x**.0), Fehlerbehebung oder
 kleine Ergänzung wie ein Link → Patch (0.x.**y**). Danach
 `python firefox.py` neu laufen lassen.
 
+## 0.4.1 — 2026-10-30
+
+- **Eine Meldung pro MR/Issue und Abfrage:** Statuswechsel, Kommentare und
+  Systemnotizen zum selben MR werden zusammengefasst, z. B. „Merged by Anna ·
+  approved by Ben · Anna: Looks good · Ben added 3 commits“. Mehrere Pushes
+  werden zusammengezählt. Kommt nur eine Sorte, bleibt die ausführliche Form.
+- Freigabe und Merge in derselben Abfrage: die Freigabe geht in der
+  Merge-Meldung auf. Freigaben ohne Merge kommen wie bisher.
+- Deutsche Texte an GitLabs eigene Begriffe angeglichen: „genehmigt von“,
+  „braucht deine Genehmigung“, Benachrichtigungsstufe „Beteiligt“.
+
 ## 0.4.0 — 2026-10-30
 
 - **Sprache wählbar:** Englisch oder Deutsch in den Einstellungen, Standard

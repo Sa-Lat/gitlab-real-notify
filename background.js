@@ -176,6 +176,52 @@ function commentsEvent(notes, item) {
   };
 }
 
+// Alles, was eine Abfrage zu einem MR/Issue findet, wird eine Meldung:
+// Statuswechsel, dann Kommentare, dann Systemnotizen, verbunden mit „ · “.
+// Gibt es nur eine Sorte, bleibt es bei der bisherigen, ausführlicheren Form.
+function itemEvent(item, stateEv, comments, system) {
+  const commits = new Map(); // Autor -> Anzahl; mehrere Pushes zählen zusammen
+  const commitNotes = new Map();
+  const others = [];
+  const seen = new Set();
+  for (const n of system) {
+    const m = /^added (\d+) (?:new )?commits?/i.exec(n.body || "");
+    if (m) {
+      commits.set(n.author.name, (commits.get(n.author.name) || 0) + Number(m[1]));
+      commitNotes.set(n.author.name, (commitNotes.get(n.author.name) || []).concat(n));
+    } else {
+      const text = noteEvent(n, item).message;
+      if (!seen.has(text)) { seen.add(text); others.push(n); }
+    }
+  }
+  const sysParts = [];
+  for (const [name, notes] of commitNotes) {
+    sysParts.push({ note: notes[0], text: notes.length === 1 ? noteEvent(notes[0], item).message
+      : tx("addedCommits", { name, n: commits.get(name) }) });
+  }
+  for (const n of others) sysParts.push({ note: n, text: noteEvent(n, item).message });
+
+  const kinds = (stateEv ? 1 : 0) + (comments.length ? 1 : 0) + (sysParts.length ? 1 : 0);
+  if (!kinds) return null;
+  if (kinds === 1 && stateEv) return stateEv;
+  if (kinds === 1 && comments.length) return comments.length === 1 ? noteEvent(comments[0], item) : commentsEvent(comments, item);
+  if (kinds === 1 && sysParts.length === 1) return Object.assign(noteEvent(sysParts[0].note, item), { message: sysParts[0].text });
+
+  const parts = [];
+  if (stateEv) parts.push(stateEv.message);
+  if (comments.length === 1) parts.push(plain(noteEvent(comments[0], item).message, 90));
+  else if (comments.length) {
+    parts.push([...new Set(comments.map((n) => n.author.name))].join(", ") + ": " + tx("comments", { n: comments.length }));
+  }
+  for (const p of sysParts) parts.push(p.text);
+  const first = comments[0] || (sysParts[0] && sysParts[0].note);
+  return {
+    title: refOf(item.kind, item.iid) + " " + plain(item.title, 80),
+    message: parts.join(" · "),
+    url: safeUrl(item.url && (first ? item.url + "#note_" + first.id : item.url))
+  };
+}
+
 function todoEvent(todo) {
   const kind = kindOf(todo.target_type);
   const t = todo.target || {};
@@ -369,25 +415,32 @@ async function pollNow() {
       it.state = x.state;
       if (first) continue;
 
-      if (from && from !== x.state) {
-        const ev = stateEvent(x, kind, me);
-        if (ev) events.push(ev);
-      }
+      const changedState = from && from !== x.state;
+      const stateEv = changedState ? stateEvent(x, kind, me) : null;
+      const merged = changedState && x.state === "merged";
 
       // shortcut: nur die letzten 50 Notizen. Reicht für eine Minute (oder
       // eine Nacht im Standby) — sonst hier pages() nehmen.
       const path = "projects/" + it.pid + (kind === "mr" ? "/merge_requests/" : "/issues/") + it.iid + "/notes";
       const notes = (await get(settings, path, { sort: "desc", order_by: "created_at", per_page: 50 })).data;
       const fresh = notes.filter((n) => it.noteId ? n.id > it.noteId : Date.parse(n.created_at) > sinceMs);
-      // Systemnotizen (Commits, Freigabe …) einzeln, Kommentare gebündelt.
+      // Freigabe und Merge in derselben Abfrage: die Freigabe geht in der
+      // Merge-Meldung auf („Merged by Anna · approved by Ben“).
       const comments = [];
+      const system = [];
+      const approvers = [];
       for (const n of fresh.sort((a, b) => a.id - b.id)) { // IDs steigen, Zeitstempel können gleich sein
         if (!relevantNote(n, me)) continue;
-        if (n.system) events.push(noteEvent(n, it));
-        else comments.push(n);
+        if (merged && n.system && /^approved this merge request/i.test(n.body || "")) approvers.push(n.author.name);
+        else (n.system ? system : comments).push(n);
       }
-      if (comments.length === 1) events.push(noteEvent(comments[0], it));
-      else if (comments.length > 1) events.push(commentsEvent(comments, it));
+      if (stateEv) {
+        const merger = x.merge_user || x.merged_by;
+        const others = [...new Set(approvers)].filter((a) => !merger || a !== merger.name);
+        if (others.length) stateEv.message += tx("approvedBy", { names: others.join(", ") });
+      }
+      const ev = itemEvent(it, stateEv, comments, system);
+      if (ev) events.push(ev);
       if (notes.length) it.noteId = Math.max(it.noteId || 0, ...notes.map((n) => n.id));
     }
 

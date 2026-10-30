@@ -54,8 +54,9 @@ first run only records the current state and doesn't notify.
 
 ## Behavior
 
-- Multiple new comments on the same MR are grouped into one notification; 6 or
-  more events at once become a single summary.
+- Everything that happens on one MR between two checks becomes one
+  notification (comments, pushes, approval + merge); 6 or more notifications at
+  once become a single summary.
 - Your own actions are never reported. Mentions arrive as a todo, not twice.
 - After sleep or a closed browser it catches up from the last successful poll.
   Short network hiccups stay silent.
