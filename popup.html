@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="de">
+<html lang="en">
 <head>
 <meta charset="utf-8" />
 <link rel="stylesheet" href="theme.css" />
@@ -94,7 +94,7 @@
       </svg>
     </div>
     <span class="eyebrow">GitLab Real Notify</span>
-    <button class="pill" id="check" title="Jetzt prüfen" aria-label="Jetzt prüfen">
+    <button class="pill" id="check" title="Check now" aria-label="Check now" data-i18n-title="checkNow" data-i18n-aria="checkNow">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <path d="M20 12a8 8 0 1 1-2.34-5.66" /><path d="M20 4v5h-5" />
       </svg>
@@ -103,13 +103,14 @@
 
   <p class="error" id="error" hidden role="alert"></p>
   <ul id="list"></ul>
-  <p class="empty" id="empty" hidden>Noch nichts Neues</p>
+  <p class="empty" id="empty" hidden data-i18n="nothingNew">Nothing new yet</p>
 
   <div class="foot">
     <span id="last"></span>
-    <span><button type="button" class="link" id="clearAll" hidden>Alle entfernen</button><span id="sep" hidden> · </span><a id="mrLink" href="#" target="_blank" rel="noopener" hidden>MR-Liste</a><span id="mrSep" hidden> · </span><a href="#" id="optionsLink">Einstellungen</a></span>
+    <span><button type="button" class="link" id="clearAll" hidden data-i18n="clearAll">Clear all</button><span id="sep" hidden> · </span><a id="mrLink" href="#" target="_blank" rel="noopener" hidden data-i18n="mrList">MR list</a><span id="mrSep" hidden> · </span><a href="#" id="optionsLink" data-i18n="settings">Settings</a></span>
   </div>
 
+  <script src="i18n.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

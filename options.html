@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="de">
+<html lang="en">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>GitLab Real Notify · Einstellungen</title>
+<title data-i18n="pageTitle">GitLab Real Notify · Settings</title>
 <link rel="stylesheet" href="theme.css" />
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -135,83 +135,96 @@
           </div>
           <span class="eyebrow">GitLab Real Notify</span>
         </div>
-        <h1>Einstellungen</h1>
-        <p class="lede">Benachrichtigungen wie bei „Participate“, nur im Browser</p>
+        <h1 data-i18n="settings">Settings</h1>
+        <p class="lede" data-i18n="lede">Notifications like GitLab’s “Participate”, right in your browser</p>
       </div>
-      <button class="pill" id="save">Speichern &amp; prüfen</button>
+      <button class="pill" id="save" data-i18n="save">Save &amp; check</button>
     </div>
 
     <p class="notiz" id="notiz" hidden role="status"></p>
 
     <div class="grid">
       <div>
-        <label for="url">GitLab-Adresse</label>
+        <label for="url" data-i18n="urlLabel">GitLab URL</label>
         <div class="field">
           <input id="url" type="url" spellcheck="false" placeholder="https://gitlab.example.com" />
         </div>
       </div>
 
       <div>
-        <label for="token">Persönlicher Zugriffstoken</label>
+        <label for="token" data-i18n="tokenLabel">Personal access token</label>
         <div class="field">
           <input id="token" type="password" spellcheck="false" autocomplete="off"
                  aria-describedby="tokenHint" />
         </div>
         <p class="feldhinweis" id="tokenHint">
-          Aus deinem eigenen Konto, Bereich <strong>read_api</strong> genügt — die Erweiterung
-          liest nur.<span id="tokenLinkWrap" hidden> <a id="tokenLink" href="#" target="_blank" rel="noopener">Token in GitLab anlegen</a>.</span>
-          Er bleibt lokal in diesem Browser.
+          <span data-i18n="tokenHint1">From your own account; the </span><strong>read_api</strong><span
+          data-i18n="tokenHint2"> scope is enough — the extension only reads.</span><span id="tokenLinkWrap" hidden>
+          <a id="tokenLink" href="#" target="_blank" rel="noopener" data-i18n="tokenLink">Create a token in GitLab</a>.</span>
+          <span data-i18n="tokenHint3">It stays local in this browser.</span>
         </p>
       </div>
 
       <div>
-        <label for="interval">Wie oft prüfen</label>
+        <label for="interval" data-i18n="intervalLabel">Check interval</label>
         <div class="field">
           <select id="interval" aria-describedby="intervalHint"></select>
         </div>
-        <p class="feldhinweis" id="intervalHint">
-          So schnell kommen Meldungen höchstens. Seltener heißt weniger Anfragen an GitLab;
-          der Aktualisieren-Knopf im Popup prüft jederzeit sofort.
+        <p class="feldhinweis" id="intervalHint" data-i18n="intervalHint">
+          Notifications arrive at most this fast. Less often means fewer requests to GitLab;
+          the refresh button in the popup checks right away at any time.
         </p>
+      </div>
+
+      <div>
+        <label for="lang" data-i18n="langLabel">Language</label>
+        <div class="field">
+          <select id="lang">
+            <option value="auto" data-i18n="langAuto">Browser language</option>
+            <option value="en">English</option>
+            <option value="de">Deutsch</option>
+          </select>
+        </div>
       </div>
     </div>
 
     <section class="block" aria-labelledby="mrHead">
       <label class="switch"><input type="checkbox" id="mrOn" aria-describedby="mrHint" />
-        <span id="mrHead">Bei neuen MRs benachrichtigen</span></label>
-      <p class="feldhinweis" id="mrHint">
-        Meldet MRs ohne Draft in diesen Gruppen und Projekten — neu angelegt oder auf
-        Ready gesetzt. Deine eigenen und solche, in denen du Reviewer bist, kommen ohnehin.
+        <span id="mrHead" data-i18n="mrHead">Notify about new MRs</span></label>
+      <p class="feldhinweis" id="mrHint" data-i18n="mrHint">
+        Reports non-draft MRs in these groups and projects — newly created or marked as
+        ready. Your own and those you review are reported anyway.
       </p>
 
       <div id="mrBox" hidden>
         <div>
-          <label for="nsInput">Gruppen und Projekte</label>
+          <label for="nsInput" data-i18n="nsLabel">Groups and projects</label>
           <ul class="rows" id="nsList"></ul>
           <div class="add">
-            <div class="field"><input id="nsInput" spellcheck="false" placeholder="z. B. example-group/team"
+            <div class="field"><input id="nsInput" spellcheck="false" placeholder="e.g. example-group/team" data-i18n-placeholder="nsPlaceholder"
                                       aria-describedby="nsHint" /></div>
-            <button type="button" id="nsAdd">Hinzufügen</button>
+            <button type="button" id="nsAdd" data-i18n="add">Add</button>
           </div>
-          <p class="feldhinweis" id="nsHint">Pfad oder Link aus GitLab. Gruppen schließen Untergruppen ein.
-            Ohne Häkchen: pausiert.</p>
+          <p class="feldhinweis" id="nsHint" data-i18n="nsHint">Path or link from GitLab. Groups include subgroups.
+            Unchecked: paused.</p>
         </div>
 
         <div>
-          <label for="lblInput">Labels ignorieren</label>
+          <label for="lblInput" data-i18n="lblLabel">Ignore labels</label>
           <ul class="rows" id="lblList"></ul>
           <div class="add">
             <div class="field"><input id="lblInput" list="lblSuggest" spellcheck="false"
-                                      placeholder="z. B. dependencies" aria-describedby="lblHint" /></div>
-            <button type="button" id="lblAdd">Hinzufügen</button>
+                                      placeholder="e.g. dependencies" data-i18n-placeholder="lblPlaceholder" aria-describedby="lblHint" /></div>
+            <button type="button" id="lblAdd" data-i18n="add">Add</button>
           </div>
           <datalist id="lblSuggest"></datalist>
-          <p class="feldhinweis" id="lblHint">MRs mit einem dieser Labels werden nicht gemeldet,
-            etwa Renovate-MRs mit „dependencies“.</p>
+          <p class="feldhinweis" id="lblHint" data-i18n="lblHint">MRs with any of these labels are not reported,
+            e.g. Renovate MRs labeled “dependencies”.</p>
         </div>
       </div>
     </section>
   </main>
+  <script src="i18n.js"></script>
   <script src="options.js"></script>
 </body>
 </html>

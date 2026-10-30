@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "GitLab Real Notify",
-  "version": "0.3.2",
-  "description": "Browser-Benachrichtigungen für alles, worüber GitLab dich bei „Participate“ per Mail informiert.",
+  "version": "0.4.0",
+  "description": "Browser notifications for everything GitLab would email you about on the Participate level.",
   "permissions": ["storage", "alarms", "notifications"],
   "optional_host_permissions": ["https://*/*"],
   "background": { "service_worker": "background.js" },

@@ -5,6 +5,16 @@ anheben: größere neue Funktion → Minor (0.**x**.0), Fehlerbehebung oder
 kleine Ergänzung wie ein Link → Patch (0.x.**y**). Danach
 `python firefox.py` neu laufen lassen.
 
+## 0.4.0 — 2026-10-30
+
+- **Sprache wählbar:** Englisch oder Deutsch in den Einstellungen, Standard
+  folgt der Browsersprache. Gilt für Popup, Einstellungen, Benachrichtigungen
+  und Fehlermeldungen; alle Texte stehen in `i18n.js`. Systemnotizen aus
+  GitLab („added 1 commit“) bleiben so, wie GitLab sie schreibt.
+- README auf Englisch, mit Hinweis auf Installation im Entwicklermodus.
+- Social-Preview für GitHub (`.github/social-preview.png`, erzeugt von
+  `icons/make.py`).
+
 ## 0.3.2 — 2026-10-29
 
 - Popup-Fußzeile: Link **MR-Liste** öffnet die MR-Übersicht in GitLab

@@ -1,18 +1,23 @@
 # GitLab Real Notify
 
-Browser-Extension (Chrome, Firefox), die GitLabs Benachrichtigungsstufe
-**Participate** als Desktop-Benachrichtigung nachbildet: Kommentare in deinen
-MRs/Issues und in Threads, in denen du kommentiert hast, dazu Zuweisungen,
-Review-Anfragen, Todos, merged/closed. Optional auch neue MRs (ohne Draft) in
-ausgewählten Gruppen/Projekten, mit Label-Filter.
+![GitLab Real Notify – Review me, maybe?](.github/social-preview.png)
 
-Pollt die GitLab-REST-API, braucht nur einen persönlichen Token mit `read_api`
-und schreibt nichts. Kein Backend, kein Build für Chrome.
+Browser extension (Chrome, Firefox) that brings GitLab's **Participate**
+notification level to your desktop: comments on your MRs/issues and in threads
+you commented on, plus assignments, review requests, todos, merged/closed.
+Optionally also new MRs (non-draft) in selected groups/projects, with a label
+filter.
+
+Polls the GitLab REST API, needs only a personal token with `read_api` and
+never writes anything. No backend, no build step for Chrome.
 
 ## Installation
 
-**Chrome:** `chrome://extensions` → Entwicklermodus → *Entpackte Erweiterung
-laden* → Repo-Ordner.
+> **Not published yet.** There is no official build in the Chrome Web Store or
+> on addons.mozilla.org — for now you install it from source in developer mode.
+
+**Chrome:** `chrome://extensions` → Developer mode → *Load unpacked* → repo
+folder.
 
 **Firefox ≥ 128:**
 
@@ -20,58 +25,58 @@ laden* → Repo-Ordner.
 python firefox.py
 ```
 
-Dann `about:debugging#/runtime/this-firefox` → *Temporäres Add-on laden* →
-`dist/firefox/manifest.json`. Hält bis zum Neustart. Für eine dauerhafte
-Installation einmal signieren: `npx web-ext sign --channel=unlisted --source-dir dist/firefox`.
+Then `about:debugging#/runtime/this-firefox` → *Load Temporary Add-on* →
+`dist/firefox/manifest.json`. Lasts until restart. For a permanent install,
+sign it once: `npx web-ext sign --channel=unlisted --source-dir dist/firefox`.
 
-## Einrichten
+## Setup
 
-Die Einstellungen öffnen sich nach der Installation:
+The settings page opens after installation:
 
-- **GitLab-Adresse:** z. B. `https://gitlab.example.com`.
-- **Token:** persönlicher Access Token des eigenen Kontos, Scope `read_api`.
-- **Takt:** 1–30 Minuten, Standard 1.
-- **Neue MRs** (optional): Gruppen- oder Projektpfade, Labels zum Ignorieren
-  (z. B. `dependencies`).
+- **GitLab URL:** e.g. `https://gitlab.example.com`.
+- **Token:** personal access token of your own account, scope `read_api`.
+- **Interval:** 1–30 minutes, default 1.
+- **Language:** English or German, default follows the browser language.
+- **New MRs** (optional): group or project paths, labels to ignore (e.g.
+  `dependencies`).
 
-**Speichern & prüfen** fragt einmal die Host-Berechtigung ab. Der erste Lauf
-merkt sich nur den Stand und meldet nichts.
+**Save & check** requests the host permission once. The
+first run only records the current state and doesn't notify.
 
-## Verhalten
+## Behavior
 
-- Mehrere neue Kommentare im selben MR werden zu einer Meldung gebündelt; ab 6
-  Ereignissen auf einmal gibt es eine Sammelmeldung.
-- Eigene Aktionen werden nicht gemeldet. Erwähnungen kommen als Todo, nicht
-  doppelt.
-- Nach Standby oder geschlossenem Browser wird ab der letzten erfolgreichen
-  Abfrage nachgeholt. Kurze Netzaussetzer bleiben still.
-- Pro Durchlauf etwa 10–20 meist leere Requests (`updated_after`).
+- Multiple new comments on the same MR are grouped into one notification; 6 or
+  more events at once become a single summary.
+- Your own actions are never reported. Mentions arrive as a todo, not twice.
+- After sleep or a closed browser it catches up from the last successful poll.
+  Short network hiccups stay silent.
+- About 10–20 mostly empty requests per run (`updated_after`).
 
-**Grenzen:**
+**Limitations:**
 
-- In GitLab stummgeschaltete Threads werden trotzdem gemeldet.
-- Threads, in denen man nur kommentiert hat, fallen nach 30 Tagen Inaktivität
-  aus der Beobachtung.
-- Systemnotizen werden am englischen Text erkannt.
+- Threads you unsubscribed from in GitLab are still reported.
+- Threads you only commented on drop out after 30 days of inactivity.
+- System notes are matched on their English text.
 
-## Entwicklung
+## Development
 
-| Datei | |
+| File | |
 | --- | --- |
-| `background.js` | Service Worker: Polling, Zustand, Benachrichtigungen. Alle Requests laufen über `get()`, das nur GET kennt. |
-| `popup.*`, `options.*`, `theme.css` | UI, ohne Framework |
-| `tests/` | Browser-Tests gegen die echte `background.js`, mit Chrome- und GitLab-Double |
-| `firefox.py` | Baut `dist/firefox/` (`background.scripts`, Gecko-ID) |
-| `icons/make.py` | Erzeugt die Icons (Pillow) |
+| `background.js` | Service worker: polling, state, notifications. Every request goes through `get()`, which only knows GET. |
+| `popup.*`, `options.*`, `theme.css` | UI, no framework |
+| `i18n.js` | All UI and notification texts (en, de), shared by service worker, popup and settings |
+| `tests/` | Browser tests against the real `background.js`, with Chrome and GitLab doubles |
+| `firefox.py` | Builds `dist/firefox/` (`background.scripts`, Gecko ID) |
+| `icons/make.py` | Generates the icons and `.github/social-preview.png` (Pillow) |
 
-Tests starten:
+Run the tests:
 
 ```bash
 python -m http.server 8000
 ```
 
-Dann `http://127.0.0.1:8000/tests/` öffnen. Der Seitentitel zeigt `PASS` oder
+Then open `http://127.0.0.1:8000/tests/`. The page title shows `PASS` or
 `FAIL n`.
 
-**Release:** Version in `manifest.json` anheben, `CHANGELOG.md` ergänzen, Tag
-`vX.Y.Z` setzen.
+**Release:** bump the version in `manifest.json`, update `CHANGELOG.md`, tag
+`vX.Y.Z`.

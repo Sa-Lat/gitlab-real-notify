@@ -73,7 +73,7 @@ RN.suite("Neue Kommentare im beobachteten Thread", async (t) => {
   await h.api.poll();
   const msgs = shown(h).map((n) => n.message);
   t.eq(msgs.length, 2, "Zwei Meldungen: Commits einzeln, Kommentare gebündelt", msgs);
-  t.ok(msgs.includes("Anna: 2 neue Kommentare · Sieht gut aus, aber bitte Tests"),
+  t.ok(msgs.includes("Anna: 2 new comments · Sieht gut aus, aber bitte Tests"),
     "Annas zwei Kommentare in einer Meldung, erster als Vorschau, Leerraum geglättet", msgs);
   t.ok(msgs.some((m) => m.startsWith("Anna added 2 commits")), "Neue Commits gemeldet", msgs);
   t.ok(!msgs.some((m) => m.includes("Mache ich")), "Eigener Kommentar nicht gemeldet");
@@ -105,7 +105,7 @@ RN.suite("Batch-Review: Kommentare pro MR gebündelt", async (t) => {
   await h.api.poll();
   const n = shown(h);
   t.eq(n.length, 1, "Drei Kommentare -> eine Meldung");
-  t.eq(n[0] && n[0].message, "Anna, Ben: 3 neue Kommentare · Fehlt hier der Field-Name?", "Alle Autoren, Anzahl, erster Kommentar");
+  t.eq(n[0] && n[0].message, "Anna, Ben: 3 new comments · Fehlt hier der Field-Name?", "Alle Autoren, Anzahl, erster Kommentar");
   t.eq(h.state.history.length, 1, "Ein Eintrag im Verlauf");
   h.dispose();
 });
@@ -154,7 +154,7 @@ RN.suite("Todos", async (t) => {
   const n = shown(h);
   t.eq(n.length, 1, "Nur das neue Todo");
   t.eq(n[0] && n[0].title, "!8 Neues Feature", "Titel");
-  t.eq(n[0] && n[0].message, "Anna bittet um dein Review: Neues Feature", "Text");
+  t.eq(n[0] && n[0].message, "Anna requested your review: Neues Feature", "Text");
   t.eq(h.state.history[0].url, "https://gitlab.example.test/g/p/-/merge_requests/8", "Link aufs Ziel");
   h.advance(60000);
   for (const k of Object.keys(h.notes)) delete h.notes[k];
@@ -173,7 +173,7 @@ RN.suite("Statuswechsel", async (t) => {
   await h.api.poll();
   const msgs = shown(h).map((n) => n.title + " | " + n.message);
   t.eq(msgs.length, 1, "Nur der fremde Statuswechsel", msgs);
-  t.eq(msgs[0], "!5 MR 5 | Anna: wurde gemergt", "Gemergt von Anna");
+  t.eq(msgs[0], "!5 MR 5 | Merged by Anna", "Gemergt von Anna");
   h.dispose();
 });
 
@@ -190,7 +190,7 @@ RN.suite("Sammelmeldung nach Standby", async (t) => {
   await h.api.poll();
   const n = shown(h);
   t.eq(n.length, 1, "Eine Sammelmeldung statt sieben");
-  t.eq(n[0] && n[0].title, "7 neue Ereignisse in GitLab", "Titel nennt die Zahl");
+  t.eq(n[0] && n[0].title, "7 new events in GitLab", "Titel nennt die Zahl");
   t.eq(h.state.history.length, 7, "Verlauf hat alle sieben");
   t.eq(h.state.history[0].message, "Anna added 1 commit Nr 7", "Neueste zuerst");
   t.eq(h.badge.text, "7", "Badge 7");
@@ -203,7 +203,7 @@ RN.suite("Fehler", async (t) => {
     h.gl.fail = { status: 401 };
     const res = await h.api.poll();
     t.ok(!res.ok, "401 meldet Fehler");
-    t.ok(/Token ungültig/.test(h.state.error), "Verständliche Meldung", h.state.error);
+    t.ok(/Token invalid/.test(h.state.error), "Verständliche Meldung", h.state.error);
     t.ok(!h.state.lastPoll, "lastPoll bleibt leer");
     t.eq(h.badge.text, "!", "Badge zeigt !");
     h.gl.fail = null;

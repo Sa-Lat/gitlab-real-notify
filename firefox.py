@@ -14,10 +14,10 @@ out = root / "dist" / "firefox"
 
 shutil.rmtree(out, ignore_errors=True)
 shutil.copytree(root, out, ignore=shutil.ignore_patterns(
-    "dist", "tests", ".claude", ".git", ".gitignore", "*.py", "*.md"))
+    "dist", "tests", ".claude", ".git", ".github", ".gitignore", "*.py", "*.md"))
 
 manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
-manifest["background"] = {"scripts": ["background.js"]}
+manifest["background"] = {"scripts": ["i18n.js", "background.js"]}  # kein importScripts in Firefox
 manifest["browser_specific_settings"] = {
     "gecko": {"id": "{fee5fc53-d9cf-4af8-824a-cb3592ca486c}", "strict_min_version": "128.0"}
 }

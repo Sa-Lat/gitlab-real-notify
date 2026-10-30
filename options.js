@@ -8,9 +8,31 @@ const notiz = document.getElementById("notiz");
 const saveBtn = document.getElementById("save");
 const mrOn = document.getElementById("mrOn");
 const intervalEl = document.getElementById("interval");
+const langEl = document.getElementById("lang");
+
+let L = "en"; // angezeigte Sprache; „auto“ löst langOf() zur Browsersprache auf
+const t = (key, vars) => tr(L, key, vars);
 
 function minutes(n) {
-  return n === 1 ? "jede Minute" : "alle " + n + " Minuten";
+  return n === 1 ? t("everyMinute") : t("everyN", { n });
+}
+
+let intervals = [];
+let hasToken = false;
+// Alle Texte der Seite in L neu setzen — beim Laden und sofort beim Umstellen.
+function relabel() {
+  applyI18n(L);
+  const keep = intervalEl.value;
+  intervalEl.textContent = "";
+  for (const n of intervals) {
+    const o = document.createElement("option");
+    o.value = String(n);
+    o.textContent = minutes(n);
+    intervalEl.appendChild(o);
+  }
+  if (keep) intervalEl.value = keep;
+  tokenEl.placeholder = hasToken ? t("tokenSaved") : "glpat-…";
+  renderMr();
 }
 
 // Neue MRs: Listen mit an/aus pro Eintrag. Gespeichert wird mit „Speichern & prüfen“.
@@ -49,7 +71,7 @@ function say(text, ok) {
 // Änderungen gelten erst nach „Speichern & prüfen“ — das soll man sehen.
 let loaded = false;
 function markDirty() {
-  if (loaded && !saveBtn.disabled) say("Noch nicht gespeichert — oben auf „Speichern & prüfen“ klicken.");
+  if (loaded && !saveBtn.disabled) say(t("notSaved"));
 }
 
 // Eine Zeilenliste: Häkchen schaltet an/aus, × entfernt. tagOf liefert den
@@ -81,8 +103,8 @@ function renderRows(listEl, items, key, tagOf) {
     x.type = "button";
     x.className = "x";
     x.textContent = "×";
-    x.title = "Entfernen";
-    x.setAttribute("aria-label", item[key] + " entfernen");
+    x.title = t("remove");
+    x.setAttribute("aria-label", t("removeItem", { name: item[key] }));
     x.addEventListener("click", () => {
       items.splice(i, 1);
       markDirty();
@@ -99,7 +121,7 @@ function renderRows(listEl, items, key, tagOf) {
 function nsTag(n) {
   if (!(n.path in resolved)) return null; // noch nicht geprüft
   const r = resolved[n.path];
-  return r ? { text: r.kind === "group" ? "Gruppe" : "Projekt" } : { text: "nicht gefunden", bad: true };
+  return r ? { text: r.kind === "group" ? t("group") : t("project") } : { text: t("notFound"), bad: true };
 }
 
 function renderMr() {
@@ -150,28 +172,30 @@ async function loadLabels() {
 async function load() {
   const status = await chrome.runtime.sendMessage({ type: "status" });
   urlEl.value = status.url;
-  tokenEl.placeholder = status.hasToken ? "gespeichert – leer lassen zum Behalten" : "glpat-…";
+  hasToken = status.hasToken;
   setTokenLink();
-  intervalEl.textContent = "";
-  for (const n of status.intervals) {
-    const o = document.createElement("option");
-    o.value = String(n);
-    o.textContent = minutes(n);
-    intervalEl.appendChild(o);
-  }
-  intervalEl.value = String(status.interval);
+  intervals = status.intervals;
+  intervalEl.value = "";
+  langEl.value = status.langSetting;
+  L = status.lang;
   mrOn.checked = !!status.newMrs.enabled;
   namespaces = status.newMrs.namespaces.map((n) => Object.assign({}, n));
   ignoreLabels = status.newMrs.ignoreLabels.map((l) => Object.assign({}, l));
   resolved = status.nsResolved;
-  renderMr();
-  if (status.me) say("Verbunden als @" + status.me.username, true);
+  relabel();
+  intervalEl.value = String(status.interval);
+  if (status.me) say(t("connectedAs", { user: status.me.username }), true);
   else if (status.error) say(status.error);
   loadLabels();
   loaded = true;
 }
 
 urlEl.addEventListener("input", setTokenLink);
+// Sprache gleich in der Seite zeigen; gespeichert wird sie wie alles andere.
+langEl.addEventListener("change", () => {
+  L = langOf(langEl.value);
+  relabel();
+});
 // Tippen in die Hinzufügen-Felder zählt nicht — das wird erst mit „Hinzufügen“ eine Änderung.
 document.querySelector("main").addEventListener("input", (e) => {
   if (!e.target.closest(".add")) markDirty();
@@ -183,14 +207,14 @@ document.querySelector("main").addEventListener("change", (e) => {
 saveBtn.addEventListener("click", async () => {
   const url = cleanUrl(urlEl.value);
   if (!url) {
-    say("Die Adresse muss mit https:// beginnen, etwa https://gitlab.example.com.");
+    say(t("urlInvalid"));
     return;
   }
   // Zugriff auf die Instanz gibt es nur per Freigabe — die muss als Erstes
   // im Klick passieren, vor jedem await.
   const granted = await chrome.permissions.request({ origins: [url + "/*"] });
   if (!granted) {
-    say("Ohne Zugriff auf " + url + " kann die Extension nichts abfragen.");
+    say(t("noAccess", { url }));
     return;
   }
 
@@ -201,10 +225,10 @@ saveBtn.addEventListener("click", async () => {
   }
 
   saveBtn.disabled = true;
-  say("Prüfe die Verbindung …", true);
+  say(t("checking"), true);
   const res = await chrome.runtime.sendMessage({
     type: "save",
-    settings: { url, token: tokenEl.value, interval: Number(intervalEl.value),
+    settings: { url, token: tokenEl.value, interval: Number(intervalEl.value), lang: langEl.value,
       newMrs: { enabled: mrOn.checked, namespaces, ignoreLabels } }
   });
   saveBtn.disabled = false;
@@ -212,13 +236,14 @@ saveBtn.addEventListener("click", async () => {
   resolved = (res && res.nsResolved) || {};
   renderMr();
   if (res && res.ok) {
-    tokenEl.placeholder = "gespeichert – leer lassen zum Behalten";
+    hasToken = true;
+    tokenEl.placeholder = t("tokenSaved");
     const missing = namespaces.filter((n) => resolved[n.path] === null).map((n) => n.path);
-    say("Verbunden als @" + res.me.username + ". Ab jetzt wird " + minutes(Number(intervalEl.value)) + " geprüft." +
-      (missing.length ? " Nicht gefunden: " + missing.join(", ") + " — Tippfehler oder kein Zugriff?" : ""), !missing.length);
+    say(t("connectedNow", { user: res.me.username, interval: minutes(Number(intervalEl.value)) }) +
+      (missing.length ? t("missing", { list: missing.join(", ") }) : ""), !missing.length);
     loadLabels();
   } else {
-    say((res && res.error) || "Unbekannter Fehler.");
+    say((res && res.error) || t("unknownError"));
   }
 });
 

@@ -41,7 +41,7 @@ RN.suite("Neue MRs · Grundstand und neuer MR", async (t) => {
   const n = shown(h);
   t.eq(n.length, 1, "Ein neuer MR gemeldet");
   t.eq(n[0] && n[0].title, "!2 Login-Seite", "Titel");
-  t.eq(n[0] && n[0].message, "Neuer MR in " + NAV + " von Anna", "Text mit Pfad und Autor");
+  t.eq(n[0] && n[0].message, "New MR in " + NAV + " by Anna", "Text mit Pfad und Autor");
   t.eq(h.state.history[0].url, "https://gitlab.example.test/g/p/-/merge_requests/2", "Link auf den MR");
 
   for (const k of Object.keys(h.notes)) delete h.notes[k];
@@ -129,7 +129,7 @@ RN.suite("Neue MRs · Projekte, Tippfehler, fremde Projekte", async (t) => {
   await h.api.poll();
   const n = shown(h);
   t.eq(n.length, 1, "Nur der MR im ausgewählten Projekt");
-  t.eq(n[0] && n[0].message, "Neuer MR in other/x von Anna", "aus other/x");
+  t.eq(n[0] && n[0].message, "New MR in other/x by Anna", "aus other/x");
   h.dispose();
 });
 
@@ -185,6 +185,35 @@ RN.suite("Abwesenheit", async (t) => {
   h.dispose();
 });
 
+RN.suite("Sprache", async (t) => {
+  const h = await newMrSetup();
+  t.eq(h.api.langOf("de"), "de", "Deutsch gewählt");
+  t.eq(h.api.langOf("en"), "en", "Englisch gewählt");
+  t.eq(h.api.langOf("fr"), h.api.langOf("auto"), "Unbekannt -> wie auto");
+  t.eq(h.api.tr("de", "comments", { n: 3 }), "3 neue Kommentare", "Platzhalter ersetzt");
+  t.eq(h.api.tr("de", "gibtsnicht"), "gibtsnicht", "Fehlender Schlüssel -> Schlüssel statt leer");
+
+  h.state.settings.lang = "de";
+  await h.warm();
+  h.gl.mrs.push(navMr(h, 30));
+  h.gl.todos.push({ id: 77, action_name: "review_requested", target_type: "MergeRequest",
+    target: { iid: 31, title: "Feature" }, project: { id: 10 }, author: h.other });
+  await h.api.poll();
+  const msgs = shown(h).map((n) => n.message);
+  t.ok(msgs.includes("Neuer MR in " + NAV + " von Anna"), "Neue MRs auf Deutsch", msgs);
+  t.ok(msgs.includes("Anna bittet um dein Review"), "Todos auf Deutsch", msgs);
+
+  await h.api.saveSettings({ url: "https://gitlab.example.test", token: "", lang: "de" });
+  t.eq(h.state.settings.lang, "de", "Speichern übernimmt die Sprache");
+  await h.api.saveSettings({ url: "https://gitlab.example.test", token: "", lang: "xx" });
+  t.eq(h.state.settings.lang, "de", "Unsinniger Wert ändert nichts");
+  h.gl.fail = { status: 401 };
+  h.advance(60000);
+  await h.api.poll();
+  t.ok(/Token ungültig/.test(h.state.error || ""), "Fehler auf Deutsch", h.state.error);
+  h.dispose();
+});
+
 RN.suite("Abfrage-Takt", async (t) => {
   const h = await newMrSetup();
   const i = h.api.intervalOf;
@@ -211,7 +240,7 @@ RN.suite("Abfrage-Takt", async (t) => {
   t.eq(h.state.error, null, "Langsamer Takt: Aussetzer bleibt länger still");
   h.advance(10 * 60000);
   await h.api.poll();
-  t.ok(/nicht erreichbar/.test(h.state.error || ""), "Nach zwei verpassten Abfragen: Fehler", h.state.error);
+  t.ok(/unreachable/.test(h.state.error || ""), "Nach zwei verpassten Abfragen: Fehler", h.state.error);
   h.dispose();
 });
 
@@ -233,7 +262,7 @@ RN.suite("Netzaussetzer nach dem Entsperren", async (t) => {
   h.gl.fail = { network: true };
   h.advance(6 * 60000);
   await h.api.poll();
-  t.ok(/nicht erreichbar/.test(h.state.error || ""), "Länger als 5 Min: Fehler wird angezeigt", h.state.error);
+  t.ok(/unreachable/.test(h.state.error || ""), "Länger als 5 Min: Fehler wird angezeigt", h.state.error);
   t.eq(h.badge.text, "!", "mit rotem !");
 
   h.gl.fail = null;
@@ -242,6 +271,6 @@ RN.suite("Netzaussetzer nach dem Entsperren", async (t) => {
   h.gl.fail = { status: 401 };
   h.advance(60000);
   await h.api.poll();
-  t.ok(/Token ungültig/.test(h.state.error || ""), "401 auch direkt nach Erfolg sofort", h.state.error);
+  t.ok(/Token invalid/.test(h.state.error || ""), "401 auch direkt nach Erfolg sofort", h.state.error);
   h.dispose();
 });

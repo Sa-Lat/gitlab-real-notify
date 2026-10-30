@@ -3,13 +3,16 @@
 // nächsten Öffnen, damit man sieht, was neu war. Ein Klick öffnet das Ziel
 // und nimmt die Meldung aus dem Verlauf, × nimmt sie nur raus.
 
+let L = "en"; // Sprache, kommt mit dem Status vom Service Worker
+const t = (key, vars) => tr(L, key, vars);
+
 function ago(ms) {
   const min = Math.round((Date.now() - ms) / 60000);
-  if (min < 1) return "gerade eben";
-  if (min < 60) return "vor " + min + " Min";
+  if (min < 1) return t("justNow");
+  if (min < 60) return t("minAgo", { n: min });
   const h = Math.round(min / 60);
-  if (h < 24) return "vor " + h + " Std";
-  return new Date(ms).toLocaleDateString("de-DE", { day: "numeric", month: "short" });
+  if (h < 24) return t("hAgo", { n: h });
+  return new Date(ms).toLocaleDateString(L, { day: "numeric", month: "short" });
 }
 
 // Sofort aus der Liste nehmen, nicht erst auf den Service Worker warten.
@@ -27,15 +30,17 @@ function openOptions(ev) {
 }
 
 function render(status) {
+  L = status.lang || "en";
+  applyI18n(L);
   const err = document.getElementById("error");
-  const text = status.error || (status.hasToken ? "" : "Noch kein Token eingetragen.");
+  const text = status.error || (status.hasToken ? "" : t("noToken"));
   err.textContent = text ? text + " " : "";
   err.hidden = !text;
   if (text) {
     const go = document.createElement("button");
     go.type = "button";
     go.className = "link";
-    go.textContent = "Einstellungen öffnen";
+    go.textContent = t("openSettings");
     go.addEventListener("click", openOptions);
     err.appendChild(go);
   }
@@ -72,8 +77,8 @@ function render(status) {
     x.type = "button";
     x.className = "x";
     x.textContent = "×";
-    x.title = "Entfernen";
-    x.setAttribute("aria-label", "Meldung entfernen: " + e.title);
+    x.title = t("remove");
+    x.setAttribute("aria-label", t("removeNotification", { title: e.title }));
     x.addEventListener("click", () => {
       // Fokus nicht ins Leere fallen lassen: nächste Zeile oder die vorige.
       const next = li.nextElementSibling || li.previousElementSibling;

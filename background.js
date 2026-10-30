@@ -16,6 +16,10 @@
 // GET. Der Token braucht deshalb nur read_api. Keinen Schreibzugriff
 // ergänzen, auch keinen bequemen — die Suite „Nur lesen“ wacht darüber.
 
+// Texte (I18N, tr, langOf). Chrome: Service Worker lädt nach; Firefox lädt
+// i18n.js vorher als eigenes background-Script, dort gibt es kein importScripts.
+if (typeof I18N === "undefined" && typeof importScripts === "function") importScripts("i18n.js");
+
 const POLL = "poll";
 // Wählbare Abfrage-Abstände in Minuten (Einstellungen). Unter 1 Minute lassen
 // Chrome und Firefox wiederkehrende Alarme nicht zuverlässig zu.
@@ -43,19 +47,12 @@ const IIDS_PER_CALL = 50; // hält die URL kurz
 // Gemergt/geschlossen kommen nicht als Notiz, sondern aus dem Statuswechsel.
 const SYSTEM_NOTE_RE = /^(added \d+ (new )?commits?|approved this merge request|unapproved this merge request|marked this merge request as ready|requested review from|assigned to)/i;
 
-const TODO_TEXT = {
-  assigned: "hat dich zugewiesen",
-  mentioned: "hat dich erwähnt",
-  directly_addressed: "spricht dich direkt an",
-  review_requested: "bittet um dein Review",
-  review_submitted: "hat ein Review abgegeben",
-  approval_required: "braucht deine Freigabe",
-  build_failed: "Pipeline fehlgeschlagen",
-  unmergeable: "lässt sich nicht mehr mergen",
-  merge_train_removed: "wurde aus dem Merge Train genommen",
-  member_access_requested: "bittet um Zugriff",
-  marked: "hat ein Todo für dich angelegt"
-};
+// Sprache der Meldungen; pollNow() setzt sie aus den Einstellungen. Läuft
+// alles über serial(), also kein Durcheinander zwischen zwei Abfragen.
+let lang = "en";
+function tx(key, vars) {
+  return tr(lang, key, vars);
+}
 
 // ---------- GitLab, nur lesend ----------
 
@@ -174,7 +171,7 @@ function commentsEvent(notes, item) {
   const who = [...new Set(notes.map((n) => n.author.name))].join(", ");
   return {
     title: refOf(item.kind, item.iid) + " " + plain(item.title, 80),
-    message: who + ": " + notes.length + " neue Kommentare · " + plain(bodyText(notes[0].body), 120),
+    message: who + ": " + tx("comments", { n: notes.length }) + " · " + plain(bodyText(notes[0].body), 120),
     url: safeUrl(item.url && item.url + "#note_" + notes[0].id)
   };
 }
@@ -182,7 +179,7 @@ function commentsEvent(notes, item) {
 function todoEvent(todo) {
   const kind = kindOf(todo.target_type);
   const t = todo.target || {};
-  const what = TODO_TEXT[todo.action_name] || todo.action_name;
+  const what = I18N.en["todo." + todo.action_name] ? tx("todo." + todo.action_name) : todo.action_name;
   const body = todo.body && todo.action_name !== "build_failed" ? ": " + plain(bodyText(todo.body), 120) : "";
   return {
     title: (kind ? refOf(kind, t.iid) + " " : "") + plain(t.title || todo.project && todo.project.name, 80),
@@ -196,11 +193,11 @@ function stateEvent(x, kind, me) {
   const actor = x.state === "merged" ? (x.merge_user || x.merged_by)
     : x.state === "closed" ? x.closed_by : null;
   if (actor && actor.id === me.id) return null;
-  const text = { merged: "wurde gemergt", closed: "wurde geschlossen", opened: "wurde wieder geöffnet" }[x.state];
-  if (!text) return null;
+  const key = { merged: "merged", closed: "closed", opened: "reopened" }[x.state];
+  if (!key) return null;
   return {
     title: refOf(kind, x.iid) + " " + plain(x.title, 80),
-    message: (actor ? actor.name + ": " : "") + text,
+    message: tx(key) + (actor ? tx("by", { name: actor.name }) : ""),
     url: safeUrl(x.web_url)
   };
 }
@@ -208,16 +205,16 @@ function stateEvent(x, kind, me) {
 function newMrEvent(x, path) {
   return {
     title: refOf("mr", x.iid) + " " + plain(x.title, 80),
-    message: "Neuer MR in " + path + (x.author ? " von " + x.author.name : ""),
+    message: tx("newMr", { path }) + (x.author ? tx("by", { name: x.author.name }) : ""),
     url: safeUrl(x.web_url)
   };
 }
 
 function errorText(e) {
-  return e.status === 401 ? "Token ungültig oder abgelaufen. Bitte in den Einstellungen neu eintragen."
-    : e.status === 403 ? "Kein Zugriff. Der Token braucht den Bereich read_api."
-    : e.status === 429 ? "GitLab bremst gerade (zu viele Anfragen). Neuer Versuch gleich."
-    : "GitLab nicht erreichbar: " + e.message;
+  return e.status === 401 ? tx("err401")
+    : e.status === 403 ? tx("err403")
+    : e.status === 429 ? tx("err429")
+    : tx("errNet", { msg: e.message });
 }
 
 // ---------- Neue MRs in ausgewählten Gruppen/Projekten ----------
@@ -286,7 +283,7 @@ async function labelSuggestions() {
       // Nur Vorschläge — ohne geht es auch.
     }
   }
-  return [...names].sort((a, b) => a.localeCompare(b, "de"));
+  return [...names].sort((a, b) => a.localeCompare(b, "en"));
 }
 
 // ---------- Abfrage ----------
@@ -307,7 +304,8 @@ function poll() {
 async function pollNow() {
   const s = await chrome.storage.local.get(null);
   const settings = s.settings;
-  if (!settings || !settings.url || !settings.token) return { ok: false, error: "Noch keine GitLab-Adresse oder kein Token eingetragen." };
+  lang = langOf(settings && settings.lang);
+  if (!settings || !settings.url || !settings.token) return { ok: false, error: tx("noSetup") };
   const started = Date.now();
   if (s.pauseUntil && started < s.pauseUntil) return { ok: false, error: s.error };
 
@@ -438,7 +436,7 @@ async function notify(events, at) {
 
   // Nach dem Standby kommt sonst eine Lawine — dann eine Sammelmeldung.
   const shown = stamped.length > BURST_MAX
-    ? [{ id: "burst-" + at, title: stamped.length + " neue Ereignisse in GitLab",
+    ? [{ id: "burst-" + at, title: tx("burst", { n: stamped.length }),
          message: stamped.slice(-3).map((e) => e.title).join("\n") }]
     : stamped;
   for (const e of shown) {
@@ -521,6 +519,7 @@ async function saveSettings(input) {
     url: String(input.url || "").trim().replace(/\/+$/, ""),
     token: String(input.token || "").trim() || old.token || "",
     interval: intervalOf({ interval: input.interval != null ? input.interval : old.interval }),
+    lang: ["auto", "en", "de"].includes(input.lang) ? input.lang : old.lang || "auto",
     newMrs: {
       enabled: !!nm.enabled,
       namespaces: cleanList(nm.namespaces, "path"),
@@ -591,6 +590,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         url: settings.url,
         hasToken: !!settings.token, // der Token selbst verlässt den Service Worker nicht
         interval: intervalOf(settings), intervals: INTERVALS,
+        langSetting: settings.lang || "auto", lang: langOf(settings.lang),
         newMrs: settings.newMrs || { enabled: false, namespaces: [], ignoreLabels: [] },
         nsResolved: s.nsResolved || {},
         me: s.me, lastPoll: s.lastPoll, error: s.error, history: s.history || []

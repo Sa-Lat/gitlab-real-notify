@@ -114,12 +114,16 @@ const RN = (function () {
   async function loadBackground(opts) {
     const o = opts || {};
     const src = await fetchSource("../background.js");
+    // Wie im Firefox-Build: i18n.js vorweg, dann braucht background.js kein importScripts.
+    const i18n = await fetchSource("../i18n.js");
     let now = START;
     const me = { id: 1, username: "lat", name: "Latz" };
     const gl = makeGitLab(me);
     const state = Object.assign({
       settings: { url: "https://gitlab.example.test", token: "glpat-test" }
     }, o.state || {});
+    // Tests prüfen englische Texte — unabhängig von der Sprache des Test-Browsers.
+    if (state.settings && !state.settings.lang) state.settings.lang = "en";
     const notes = {};
     const opened = [];
     const badge = { text: null };
@@ -155,9 +159,9 @@ const RN = (function () {
       }
     };
 
-    const names = topLevelFunctions(src);
+    const names = topLevelFunctions(i18n + "\n" + src);
     const factory = new Function("chrome", "fetch", "__now",
-      src + "\n Date.now = () => __now();" +
+      i18n + "\n" + src + "\n Date.now = () => __now();" +
       "\n return {" + names.map((n) => JSON.stringify(n) + ":" + n).join(",") + "};");
     const fetchLogged = (url, init) => { iconLog.push("fetch"); return gl.fetch(url, init); };
     const api = factory(chrome, fetchLogged, () => now);
