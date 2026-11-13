@@ -87,7 +87,7 @@ const RN = (function () {
       const u = new URL(url);
       const path = u.pathname.replace(/^\/api\/v4\//, "");
       const headers = (init && init.headers) || {};
-      gl.calls.push({ method: (init && init.method) || "GET", path, query: u.searchParams, headers });
+      gl.calls.push({ method: (init && init.method) || "GET", host: u.host, path, query: u.searchParams, headers });
       if (init && init.method && init.method !== "GET") throw new Error("Schreibzugriff: " + init.method + " " + path);
       if (gl.fail && gl.fail.network) throw new TypeError("Failed to fetch"); // so meldet Chrome „kein Netz“
       if (gl.fail) {
@@ -182,7 +182,7 @@ const RN = (function () {
     const api = factory(chrome, fetchLogged, () => now);
 
     return {
-      api, gl, state, notes, opened, badge, alarms, me, src, iconLog,
+      api, gl, state, notes, opened, badge, alarms, me, src, iconLog, chrome,
       other: { id: 2, username: "anna", name: "Anna" },
       now: () => now,
       iso: (ms) => iso(ms == null ? now : ms),

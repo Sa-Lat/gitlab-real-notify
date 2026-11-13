@@ -123,7 +123,7 @@ function escapeRegex(s) {
 // Eine Erwähnung erzeugt bei GitLab ein Todo, das wir ohnehin melden —
 // die Notiz dazu also nicht zusätzlich.
 function mentions(body, username) {
-  return new RegExp("@" + escapeRegex(username) + "(?![\\w-])", "i").test(body || "");
+  return new RegExp("@" + escapeRegex(username) + "(?![\\w-]|\\.[\\w-])", "i").test(body || "");
 }
 
 // Notiz-Texte sind Markdown mit eingestreutem HTML (Systemnotizen zu Commits
@@ -131,8 +131,11 @@ function mentions(body, username) {
 // Die Meldung zeigt nur Text. Titel laufen nicht hier durch: „Fix <Button>“
 // ist dort Inhalt, kein Markup.
 const ENTITIES = { amp: "&", lt: "<", gt: ">", quot: "\"", "#39": "'", nbsp: " " };
+// Erst kürzen: die Muster unten brauchen bei vielen „<“ oder „[“ quadratisch
+// lange — ein 1-MB-Kommentar legte sonst jede Abfrage lahm. Gezeigt werden
+// ohnehin höchstens 160 Zeichen.
 function bodyText(md) {
-  return String(md || "")
+  return String(md || "").slice(0, 2000)
     .replace(/\[Compare with previous version\]\([^)]*\)/gi, "")
     .replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1") // Links und Bilder -> ihr Text
     .replace(/```[\s\S]*?```/g, " … ")          // Codeblöcke sprengen jede Meldung
@@ -470,11 +473,15 @@ async function pollNow() {
 
     // Erst ganz am Ende speichern: bricht die Abfrage ab, wird sie beim
     // nächsten Mal komplett wiederholt, statt Meldungen zu verlieren.
-    await chrome.storage.local.set({
+    // Verlauf im selben set wie lastPoll — stirbt der Worker dazwischen, wären die Meldungen sonst weg.
+    const stamped = events.map((e, i) => Object.assign({ id: "n" + started + "-" + i, at: started, read: false }, e));
+    const update = {
       me, items, todoIds: todos.map((t) => t.id), nsResolved, newMr,
       lastPoll: started, error: null, pauseUntil: 0
-    });
-    await notify(events, started);
+    };
+    if (stamped.length) update.history = stamped.slice().reverse().concat(s.history || []).slice(0, HISTORY_MAX);
+    await chrome.storage.local.set(update);
+    await notify(stamped, started);
     return { ok: true, me, count: events.length };
   } catch (e) {
     // Netz weg oder Server-Schluckauf kurz nach einem Erfolg: still bleiben,
@@ -495,12 +502,10 @@ async function pollNow() {
 
 // ---------- Melden ----------
 
-async function notify(events, at) {
-  if (!events.length) return updateBadge();
-  const { history = [] } = await chrome.storage.local.get("history");
-  const stamped = events.map((e, i) => Object.assign({ id: "n" + at + "-" + i, at, read: false }, e));
-  await chrome.storage.local.set({ history: stamped.slice().reverse().concat(history).slice(0, HISTORY_MAX) });
+// Zeigt die schon gespeicherten Meldungen an.
+async function notify(stamped, at) {
   await updateBadge();
+  if (!stamped.length) return;
 
   // Nach dem Standby kommt sonst eine Lawine — dann eine Sammelmeldung.
   const shown = stamped.length > BURST_MAX
@@ -590,9 +595,12 @@ function dismiss(ids) {
 async function dismissDone() {
   const { settings, me, history = [] } = await chrome.storage.local.get(["settings", "me", "history"]);
   loadIgnored(settings);
-  const base = settings.url.replace(/\/*$/, "/");
+  // Nur der Pfad zählt: GitLabs Links können einen anderen Host tragen als die eingetragene Adresse.
+  const base = new URL(settings.url).pathname.replace(/\/*$/, "/");
   const keyOfEvent = (e) => {
-    const m = (e.url || "").startsWith(base) && /^(.+?)\/-\/(merge_requests|issues)\/(\d+)(?!\d)/.exec(e.url.slice(base.length));
+    let p;
+    try { p = new URL(e.url).pathname; } catch (err) { return null; }
+    const m = p.startsWith(base) && /^(.+?)\/-\/(merge_requests|issues)\/(\d+)(?!\d)/.exec(p.slice(base.length));
     return m ? m[1] + "|" + m[2] + "|" + m[3] : null;
   };
   const groups = {}; // "pfad|art" -> iids
@@ -664,10 +672,12 @@ async function dismissDone() {
   return ids;
 }
 
-function markRead() {
+// ids: was das Popup gezeigt hat — eine währenddessen eingetroffene Meldung bleibt ungelesen.
+function markRead(ids) {
   return serial(async () => {
     const { history = [] } = await chrome.storage.local.get("history");
-    for (const e of history) e.read = true;
+    const seen = ids ? new Set(ids) : null;
+    for (const e of history) if (!seen || seen.has(e.id)) e.read = true;
     await chrome.storage.local.set({ history });
     await updateBadge();
   });
@@ -685,9 +695,11 @@ function cleanList(list, key) {
 async function saveSettings(input) {
   const { settings: old = {}, me: oldMe } = await chrome.storage.local.get(["settings", "me"]);
   const nm = input.newMrs || old.newMrs || {};
+  const url = String(input.url || "").trim().replace(/\/+$/, "");
   const settings = {
-    url: String(input.url || "").trim().replace(/\/+$/, ""),
-    token: String(input.token || "").trim() || old.token || "",
+    url,
+    // Alter Token nur für dieselbe Adresse — sonst ginge er an einen fremden (vertippten) Server.
+    token: String(input.token || "").trim() || (old.url === url && old.token) || "",
     interval: intervalOf({ interval: input.interval != null ? input.interval : old.interval }),
     lang: ["auto", "en", "de"].includes(input.lang) ? input.lang : old.lang || "auto",
     ignoreUsers: cleanList((input.ignoreUsers || old.ignoreUsers || []).map((u) => ({ name: String(u.name || "").replace(/^@/, "").toLowerCase(), on: u.on })), "name"),
@@ -772,7 +784,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     } else if (msg.type === "pollNow") {
       sendResponse(await poll());
     } else if (msg.type === "markRead") {
-      await markRead();
+      await markRead(msg.ids || null);
       sendResponse({ ok: true });
     } else if (msg.type === "open") {
       await openEvent(msg.id);

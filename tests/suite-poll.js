@@ -546,3 +546,65 @@ RN.suite("Erledigte entfernen · neue MRs mit Reviewer", async (t) => {
   t.eq(h.state.history.map((e) => e.id).join(), "b,d", "Ohne Reviewer und andere Meldungen bleiben");
   h.dispose();
 });
+
+RN.suite("Token bleibt bei der eigenen Adresse", async (t) => {
+  const h = await RN.loadBackground();
+  await h.warm();
+  h.gl.calls.length = 0;
+  await h.api.saveSettings({ url: "https://gitlab.vertippt.test", token: "" });
+  t.ok(h.gl.calls.every((c) => c.headers["PRIVATE-TOKEN"] !== "glpat-test"), "Alter Token geht nicht an eine neue Adresse");
+  t.eq(h.state.settings.token, "", "Neue Adresse ohne Token: Feld bleibt leer");
+  h.dispose();
+});
+
+RN.suite("Erwähnung nur für genau mich", async (t) => {
+  const h = await RN.loadBackground();
+  t.ok(h.api.mentions("danke @lat.", "lat"), "@lat am Satzende zählt");
+  t.ok(!h.api.mentions("frag mal @lat.mueller", "lat"), "@lat.mueller ist jemand anderes");
+  t.ok(!h.api.mentions("@lat-bot", "lat"), "@lat-bot ist jemand anderes");
+  h.dispose();
+});
+
+RN.suite("Popup wirkt nur auf Angezeigtes", async (t) => {
+  const h = await RN.loadBackground();
+  h.state.history = ["neu", "alt"].map((id) => ({ id, title: id, message: "", url: null, at: 1, read: false }));
+  await h.api.markRead(["alt"]);
+  t.eq(h.state.history.map((e) => e.id + ":" + e.read).join(), "neu:false,alt:true", "Erst nach dem Öffnen gekommene bleibt ungelesen");
+  t.eq(h.badge.text, "1", "Badge zählt sie weiter");
+  h.dispose();
+});
+
+RN.suite("Verlauf und Stand in einem Schreibvorgang", async (t) => {
+  const h = await RN.loadBackground();
+  commentedOn(h, 5);
+  h.gl.mrs.push(mr(h, 5));
+  await h.warm();
+  h.gl.mrs[0].updated_at = h.iso();
+  h.gl.notes["mr:10:5"] = [note(h, 7, h.other, "neu")];
+  const writes = [];
+  const set = h.chrome.storage.local.set;
+  h.chrome.storage.local.set = async (obj) => { writes.push(Object.keys(obj)); return set(obj); };
+  await h.api.poll();
+  t.ok(writes.some((k) => k.includes("lastPoll") && k.includes("history")), "lastPoll und history zusammen gespeichert", JSON.stringify(writes));
+  t.eq(h.state.history.length, 1, "Meldung im Verlauf");
+  h.dispose();
+});
+
+RN.suite("Erledigte entfernen · anderer Host in den Links", async (t) => {
+  const h = await RN.loadBackground();
+  h.gl.projects.push({ id: 10, path_with_namespace: "g/p" });
+  h.gl.mrs.push(mr(h, 5, { state: "merged" }));
+  h.state.history = [{ id: "a", title: "a", message: "", url: "https://gitlab.intern.test/g/p/-/merge_requests/5", at: 1, read: true }];
+  t.eq((await h.api.dismissDone()).join(), "a", "Pfad zählt, nicht der Host");
+  h.dispose();
+});
+
+RN.suite("Riesiger Kommentar blockiert die Abfrage nicht", async (t) => {
+  const h = await RN.loadBackground();
+  const t0 = performance.now();
+  const out = h.api.bodyText("<".repeat(1000000));
+  t.ok(performance.now() - t0 < 200, "1 MB „<“ in unter 200 ms", Math.round(performance.now() - t0) + " ms");
+  t.ok(out.length <= 2000, "Text gekürzt");
+  t.eq(h.api.bodyText("**fett** und [Link](https://x)"), "fett und Link", "Kurzer Text unverändert bereinigt");
+  h.dispose();
+});

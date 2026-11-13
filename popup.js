@@ -4,6 +4,7 @@
 // und nimmt die Meldung aus dem Verlauf, × nimmt sie nur raus.
 
 let L = "en"; // Sprache, kommt mit dem Status vom Service Worker
+let shownIds = []; // was gerade angezeigt wird — nur das gilt als gelesen bzw. wird geleert
 const t = (key, vars) => tr(L, key, vars);
 
 function ago(ms) {
@@ -54,6 +55,7 @@ function render(status) {
 
   const list = document.getElementById("list");
   list.textContent = "";
+  shownIds = status.history.map((e) => e.id);
   for (const e of status.history) {
     const li = document.createElement("li");
     const a = document.createElement("a");
@@ -112,7 +114,7 @@ document.getElementById("check").addEventListener("click", async (ev) => {
 
 document.getElementById("clearAll").addEventListener("click", async () => {
   document.querySelectorAll("#list li").forEach(drop);
-  await chrome.runtime.sendMessage({ type: "dismiss" });
+  await chrome.runtime.sendMessage({ type: "dismiss", ids: shownIds });
 });
 
 // Öffnet alles in Hintergrund-Tabs; der Service Worker räumt die Liste ab.
@@ -140,4 +142,4 @@ document.getElementById("clearDone").addEventListener("click", async (ev) => {
 
 document.getElementById("optionsLink").addEventListener("click", openOptions);
 
-refresh().then(() => chrome.runtime.sendMessage({ type: "markRead" }));
+refresh().then(() => chrome.runtime.sendMessage({ type: "markRead", ids: shownIds }));

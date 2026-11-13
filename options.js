@@ -19,6 +19,7 @@ function minutes(n) {
 
 let intervals = [];
 let hasToken = false;
+let savedUrl = ""; // gespeicherte Adresse — deren Freigabe fällt beim Wechsel weg
 // Alle Texte der Seite in L neu setzen — beim Laden und sofort beim Umstellen.
 function relabel() {
   applyI18n(L);
@@ -181,7 +182,7 @@ async function loadLabels() {
 
 async function load() {
   const status = await chrome.runtime.sendMessage({ type: "status" });
-  urlEl.value = status.url;
+  urlEl.value = savedUrl = status.url;
   hasToken = status.hasToken;
   setTokenLink();
   intervals = status.intervals;
@@ -246,6 +247,14 @@ saveBtn.addEventListener("click", async () => {
   tokenEl.value = "";
   resolved = (res && res.nsResolved) || {};
   renderMr();
+  // Gespeichert ist die neue Adresse auch bei Fehler — Zugriff auf die alte
+  // braucht es nicht mehr. Nur bei anderem Origin: Freigaben gelten pro Host,
+  // sonst fiele auch die neue weg.
+  const oldOrigin = cleanUrl(savedUrl) && new URL(savedUrl).origin;
+  if (oldOrigin && oldOrigin !== new URL(url).origin) {
+    try { await chrome.permissions.remove({ origins: [oldOrigin + "/*"] }); } catch (e) { /* egal */ }
+  }
+  savedUrl = url;
   if (res && res.ok) {
     hasToken = true;
     tokenEl.placeholder = t("tokenSaved");

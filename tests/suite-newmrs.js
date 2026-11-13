@@ -178,10 +178,14 @@ RN.suite("Abwesenheit", async (t) => {
   t.ok(!!h.state.items["mr:10:13"], "Am Wochenende kommentierter Thread wird beobachtet");
   t.eq(shown(h).length, 2, "MRs vom Wochenende werden nachgemeldet");
 
-  const many = [];
-  for (let i = 0; i < 210; i++) many.push({ title: "x" + i, message: "", url: null });
-  await h.api.notify(many, h.now());
+  h.state.history = [];
+  for (let i = 0; i < 210; i++) h.state.history.push({ id: "x" + i, title: "x" + i, message: "", url: null, at: 1, read: true });
+  h.gl.todos.push({ id: 4711, action_name: "assigned", target_type: "Issue",
+    target: { iid: 99, title: "Neu" }, project: { id: 11 }, author: h.other });
+  h.advance(60000);
+  await h.api.poll();
   t.eq(h.state.history.length, 200, "Verlauf hält 200 Einträge");
+  t.eq(h.state.history[0].title.includes("Neu"), true, "Neueste vorn, älteste fallen raus");
   h.dispose();
 });
 

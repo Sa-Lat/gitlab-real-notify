@@ -5,6 +5,25 @@ anheben: größere neue Funktion → Minor (0.**x**.0), Fehlerbehebung oder
 kleine Ergänzung wie ein Link → Patch (0.x.**y**). Danach
 `python firefox.py` neu laufen lassen.
 
+## 0.5.1 — 2026-11-13
+
+- **Sicherheit:** Beim Speichern mit leerem Token-Feld wird der alte Token nur
+  noch für dieselbe Adresse übernommen. Vorher ging er bei einer neuen oder
+  vertippten Adresse an den fremden Server. Beim Wechsel auf eine andere
+  Instanz gibt die Erweiterung außerdem den Zugriff auf die alte wieder ab.
+- **Sicherheit:** Ein riesiger Kommentar (z. B. 1 MB voller `<`) konnte die
+  Text-Bereinigung minutenlang beschäftigen und damit jede Abfrage dauerhaft
+  blockieren. Kommentartexte werden jetzt vorher auf 2000 Zeichen gekürzt.
+- Kommentare mit `@name.nachname` gelten nicht mehr als Erwähnung von `@name`
+  und werden wieder gemeldet, statt lautlos zu verschwinden.
+- Popup: Öffnen markiert nur die angezeigten Meldungen als gelesen, „Alle
+  entfernen“ löscht nur die angezeigten. Was währenddessen ankommt, bleibt.
+- Stand und Verlauf werden in einem Schritt gespeichert. Beendet der Browser
+  den Service Worker mitten in der Abfrage, gehen keine Meldungen mehr verloren.
+- „Erledigte entfernen“ vergleicht nur noch den Pfad der Links, nicht den
+  Host. Es funktioniert jetzt auch, wenn GitLab einen anderen Hostnamen liefert
+  als den eingetragenen.
+
 ## 0.5.0 — 2026-11-13
 
 - **Erledigte entfernen:** neuer Button im Popup nimmt alle Meldungen zu MRs
