@@ -9,6 +9,12 @@ const saveBtn = document.getElementById("save");
 const mrOn = document.getElementById("mrOn");
 const intervalEl = document.getElementById("interval");
 const langEl = document.getElementById("lang");
+const quietOn = document.getElementById("quietOn");
+const quietFrom = document.getElementById("quietFrom");
+const quietTo = document.getElementById("quietTo");
+const quietWeekend = document.getElementById("quietWeekend");
+const showQuiet = () => { document.getElementById("quietBox").hidden = !quietOn.checked; };
+quietOn.addEventListener("change", showQuiet);
 
 let L = "en"; // angezeigte Sprache; „auto“ löst langOf() zur Browsersprache auf
 const t = (key, vars) => tr(L, key, vars);
@@ -40,6 +46,7 @@ function relabel() {
 let namespaces = [];   // [{ path, on }]
 let ignoreLabels = []; // [{ name, on }]
 let ignoreUsers = [];  // [{ name, on }], Benutzername ohne @
+let importantLabels = []; // [{ name, on }], im Popup hervorgehoben
 let resolved = {};     // path -> { kind, id } | null (nicht gefunden)
 
 function cleanUrl(s) {
@@ -131,6 +138,7 @@ function renderMr() {
   renderRows(document.getElementById("nsList"), namespaces, "path", nsTag);
   renderRows(document.getElementById("lblList"), ignoreLabels, "name");
   renderRows(document.getElementById("userList"), ignoreUsers, "name");
+  renderRows(document.getElementById("hotList"), importantLabels, "name");
 }
 
 function wireAdd(inputId, buttonId, add) {
@@ -150,11 +158,15 @@ function addNs(raw) {
   return !!path;
 }
 
-function addLabel(raw) {
-  const name = raw.trim();
-  if (name && !ignoreLabels.some((l) => l.name.toLowerCase() === name.toLowerCase())) ignoreLabels.push({ name, on: true });
-  return !!name;
+function addLabelTo(list) {
+  return (raw) => {
+    const name = raw.trim();
+    if (name && !list().some((l) => l.name.toLowerCase() === name.toLowerCase())) list().push({ name, on: true });
+    return !!name;
+  };
 }
+const addLabel = addLabelTo(() => ignoreLabels);
+const addHot = addLabelTo(() => importantLabels);
 
 // „@claude-bot“ oder Profil-Link -> „claude-bot“
 function addUser(raw) {
@@ -165,6 +177,7 @@ function addUser(raw) {
 
 wireAdd("nsInput", "nsAdd", addNs);
 wireAdd("userInput", "userAdd", addUser);
+wireAdd("hotInput", "hotAdd", addHot);
 wireAdd("lblInput", "lblAdd", addLabel);
 
 mrOn.addEventListener("change", renderMr);
@@ -190,9 +203,15 @@ async function load() {
   langEl.value = status.langSetting;
   L = status.lang;
   mrOn.checked = !!status.newMrs.enabled;
+  quietOn.checked = !!status.quiet.enabled;
+  quietFrom.value = status.quiet.from;
+  quietTo.value = status.quiet.to;
+  quietWeekend.checked = !!status.quiet.weekend;
+  showQuiet();
   namespaces = status.newMrs.namespaces.map((n) => Object.assign({}, n));
   ignoreLabels = status.newMrs.ignoreLabels.map((l) => Object.assign({}, l));
   ignoreUsers = (status.ignoreUsers || []).map((u) => Object.assign({}, u));
+  importantLabels = (status.importantLabels || []).map((l) => Object.assign({}, l));
   resolved = status.nsResolved;
   relabel();
   intervalEl.value = String(status.interval);
@@ -231,7 +250,7 @@ saveBtn.addEventListener("click", async () => {
   }
 
   // Noch Getipptes, aber nicht Hinzugefügtes nicht verlieren.
-  for (const [id, add] of [["nsInput", addNs], ["lblInput", addLabel], ["userInput", addUser]]) {
+  for (const [id, add] of [["nsInput", addNs], ["lblInput", addLabel], ["userInput", addUser], ["hotInput", addHot]]) {
     const input = document.getElementById(id);
     if (add(input.value)) input.value = "";
   }
@@ -240,7 +259,8 @@ saveBtn.addEventListener("click", async () => {
   say(t("checking"), true);
   const res = await chrome.runtime.sendMessage({
     type: "save",
-    settings: { url, token: tokenEl.value, interval: Number(intervalEl.value), lang: langEl.value, ignoreUsers,
+    settings: { url, token: tokenEl.value, interval: Number(intervalEl.value), lang: langEl.value, ignoreUsers, importantLabels,
+      quiet: { enabled: quietOn.checked, from: quietFrom.value, to: quietTo.value, weekend: quietWeekend.checked },
       newMrs: { enabled: mrOn.checked, namespaces, ignoreLabels } }
   });
   saveBtn.disabled = false;

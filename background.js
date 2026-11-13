@@ -58,8 +58,11 @@ function tx(key, vars) {
 // Aktivität wird nicht gemeldet, ihre Antworten zählen bei „Erledigte
 // entfernen“ als deine. Setzen pollNow() und dismissDone() über loadIgnored().
 let ignored = new Set();
+// Wichtige Labels (Einstellungen): stehen an der Meldung vorn und fallen beim Kürzen nie weg.
+let important = new Set();
 function loadIgnored(settings) {
   ignored = new Set(((settings && settings.ignoreUsers) || []).filter((u) => u.on).map((u) => u.name.toLowerCase()));
+  important = new Set(((settings && settings.importantLabels) || []).filter((l) => l.on).map((l) => l.name.toLowerCase()));
 }
 function muted(user) {
   return !!user && ignored.has(String(user.username || "").toLowerCase());
@@ -150,6 +153,19 @@ function plain(text, max) {
   return s.length > max ? s.slice(0, max - 1) + "…" : s;
 }
 
+// Labels für die Liste im Popup, gedeckelt: höchstens 8 Einträge (bei mehr
+// 7 und „+N“), je höchstens 40 Zeichen — hält den Verlauf im Speicher klein,
+// egal wie viele Labels ein MR hat. Was in die Zeile passt, misst das Popup.
+const LABELS_MAX = 8;
+function labelsOf(list) {
+  const hot = (n) => important.has(n.toLowerCase());
+  const names = (Array.isArray(list) ? list : [])
+    .map((l) => String((typeof l === "string" ? l : l && l.name) || "").trim()).filter(Boolean)
+    .sort((a, b) => hot(b) - hot(a)) // wichtige zuerst, sonst Reihenfolge wie in GitLab
+    .map((n) => plain(n, 40));
+  return names.length > LABELS_MAX ? names.slice(0, LABELS_MAX - 1).concat("+" + (names.length - LABELS_MAX + 1)) : names;
+}
+
 // Nur http(s) als Ziel — die Links kommen aus der API und landen in Tabs.
 function safeUrl(u) {
   return /^https?:\/\//i.test(u || "") ? u : null;
@@ -175,7 +191,8 @@ function noteEvent(note, item) {
   return {
     title: refOf(item.kind, item.iid) + " " + plain(item.title, 80),
     message: who + (note.system ? " " : ": ") + plain(bodyText(note.body), 160),
-    url: safeUrl(item.url && item.url + "#note_" + note.id)
+    url: safeUrl(item.url && item.url + "#note_" + note.id),
+    at: Date.parse(note.created_at) // wann es passiert ist, nicht wann wir gefragt haben
   };
 }
 
@@ -187,7 +204,8 @@ function commentsEvent(notes, item) {
     title: refOf(item.kind, item.iid) + " " + plain(item.title, 80),
     message: who + ": " + tx("comments", { n: notes.length }) + " · " + plain(bodyText(notes[0].body), 120),
     url: safeUrl(item.url && item.url + "#note_" + notes[0].id),
-    notes: notes.map((n) => n.id) // für „Erledigte entfernen“: alle, nicht nur der verlinkte
+    notes: notes.map((n) => n.id), // für „Erledigte entfernen“: alle, nicht nur der verlinkte
+    at: Date.parse(notes[notes.length - 1].created_at)
   };
 }
 
@@ -234,7 +252,8 @@ function itemEvent(item, stateEv, comments, system) {
     title: refOf(item.kind, item.iid) + " " + plain(item.title, 80),
     message: parts.join(" · "),
     url: safeUrl(item.url && (first ? item.url + "#note_" + first.id : item.url)),
-    notes: comments.map((n) => n.id)
+    notes: comments.map((n) => n.id),
+    at: Math.max(stateEv ? stateEv.at || 0 : 0, ...comments.concat(system).map((n) => Date.parse(n.created_at) || 0))
   };
 }
 
@@ -246,7 +265,10 @@ function todoEvent(todo) {
   return {
     title: (kind ? refOf(kind, t.iid) + " " : "") + plain(t.title || todo.project && todo.project.name, 80),
     message: (todo.author ? todo.author.name + " " : "") + what + body,
-    url: safeUrl(todo.target_url)
+    url: safeUrl(todo.target_url),
+    at: Date.parse(todo.created_at),
+    todo: true, // wartet auf dich: steht im Popup oben
+    labels: labelsOf(t.labels)
   };
 }
 
@@ -260,7 +282,8 @@ function stateEvent(x, kind, me) {
   return {
     title: refOf(kind, x.iid) + " " + plain(x.title, 80),
     message: tx(key) + (actor ? tx("by", { name: actor.name }) : ""),
-    url: safeUrl(x.web_url)
+    url: safeUrl(x.web_url),
+    at: Date.parse(x.merged_at || x.closed_at || x.updated_at)
   };
 }
 
@@ -269,7 +292,9 @@ function newMrEvent(x, path) {
     title: refOf("mr", x.iid) + " " + plain(x.title, 80),
     message: tx("newMr", { path }) + (x.author ? tx("by", { name: x.author.name }) : ""),
     url: safeUrl(x.web_url),
-    newMr: true // für „Erledigte entfernen“: mit Reviewer kümmert sich schon jemand
+    newMr: true, // für „Erledigte entfernen“: mit Reviewer kümmert sich schon jemand
+    at: Date.parse(x.updated_at), // neu angelegt oder gerade auf Ready gesetzt
+    labels: labelsOf(x.labels)
   };
 }
 
@@ -437,10 +462,18 @@ async function pollNow() {
       const stateEv = changedState ? stateEvent(x, kind, me) : null;
       const merged = changedState && x.state === "merged";
 
-      // shortcut: nur die letzten 50 Notizen. Reicht für eine Minute (oder
-      // eine Nacht im Standby) — sonst hier pages() nehmen.
+      // Neueste zuerst, weiterblättern, bis wir bei Bekanntem sind — sonst
+      // fallen nach einer lauten Nacht (Pushes, Labels …) Kommentare raus.
+      // shortcut: höchstens 10 Seiten (1000 Notizen) pro MR und Abfrage.
       const path = "projects/" + it.pid + (kind === "mr" ? "/merge_requests/" : "/issues/") + it.iid + "/notes";
-      const notes = (await get(settings, path, { sort: "desc", order_by: "created_at", per_page: 50 })).data;
+      const notes = [];
+      for (let page = 1, i = 0; page && i < 10; i++) {
+        const res = await get(settings, path, { sort: "desc", order_by: "created_at", per_page: 100, page });
+        notes.push(...res.data);
+        const last = res.data[res.data.length - 1];
+        if (!last || (it.noteId ? last.id <= it.noteId : Date.parse(last.created_at) <= sinceMs)) break;
+        page = Number(res.next) || 0;
+      }
       const fresh = notes.filter((n) => it.noteId ? n.id > it.noteId : Date.parse(n.created_at) > sinceMs);
       // Freigabe und Merge in derselben Abfrage: die Freigabe geht in der
       // Merge-Meldung auf („Merged by Anna · approved by Ben“).
@@ -458,7 +491,7 @@ async function pollNow() {
         if (others.length) stateEv.message += tx("approvedBy", { names: others.join(", ") });
       }
       const ev = itemEvent(it, stateEv, comments, system);
-      if (ev) events.push(ev);
+      if (ev) events.push(Object.assign(ev, { labels: labelsOf(x.labels) }));
       if (notes.length) it.noteId = Math.max(it.noteId || 0, ...notes.map((n) => n.id));
     }
 
@@ -474,14 +507,22 @@ async function pollNow() {
     // Erst ganz am Ende speichern: bricht die Abfrage ab, wird sie beim
     // nächsten Mal komplett wiederholt, statt Meldungen zu verlieren.
     // Verlauf im selben set wie lastPoll — stirbt der Worker dazwischen, wären die Meldungen sonst weg.
-    const stamped = events.map((e, i) => Object.assign({ id: "n" + started + "-" + i, at: started, read: false }, e));
+    // at: wann es in GitLab passiert ist; fehlt die Angabe oder liegt sie
+    // (Uhrenversatz) in der Zukunft, der Zeitpunkt der Abfrage.
+    const stamped = events.map((e, i) => Object.assign({ id: "n" + started + "-" + i, read: false }, e,
+      { at: Math.min(e.at || started, started) }));
+    // Ruhezeit: Meldungen landen still im Verlauf (held merkt sich, dass
+    // etwas kam); danach gibt es eine Sammelmeldung über das Ungelesene.
+    const hush = quietNow(settings, s.muteUntil, started);
     const update = {
       me, items, todoIds: todos.map((t) => t.id), nsResolved, newMr,
-      lastPoll: started, error: null, pauseUntil: 0
+      lastPoll: started, error: null, pauseUntil: 0,
+      held: hush && (!!s.held || stamped.length > 0)
     };
     if (stamped.length) update.history = stamped.slice().reverse().concat(s.history || []).slice(0, HISTORY_MAX);
     await chrome.storage.local.set(update);
-    await notify(stamped, started);
+    const unread = (update.history || s.history || []).filter((e) => !e.read).length;
+    await notify(hush ? [] : stamped, started, !hush && s.held ? unread : 0);
     return { ok: true, me, count: events.length };
   } catch (e) {
     // Netz weg oder Server-Schluckauf kurz nach einem Erfolg: still bleiben,
@@ -502,15 +543,17 @@ async function pollNow() {
 
 // ---------- Melden ----------
 
-// Zeigt die schon gespeicherten Meldungen an.
-async function notify(stamped, at) {
+// Zeigt die schon gespeicherten Meldungen an. held: Ende der Ruhezeit,
+// so viele Meldungen sind ungelesen (die neuen eingerechnet).
+async function notify(stamped, at, held) {
   await updateBadge();
-  if (!stamped.length) return;
+  const n = held || stamped.length;
+  if (!n) return;
 
-  // Nach dem Standby kommt sonst eine Lawine — dann eine Sammelmeldung.
-  const shown = stamped.length > BURST_MAX
-    ? [{ id: "burst-" + at, title: tx("burst", { n: stamped.length }),
-         message: stamped.slice(-3).map((e) => e.title).join("\n") }]
+  // Nach dem Standby oder der Ruhezeit kommt sonst eine Lawine — dann eine Sammelmeldung.
+  const shown = held || n > BURST_MAX
+    ? [{ id: "burst-" + at, title: tx("burst", { n }),
+         message: held ? tx("heldMsg") : stamped.slice(-3).map((e) => e.title).join("\n") }]
     : stamped;
   for (const e of shown) {
     try {
@@ -695,6 +738,7 @@ function cleanList(list, key) {
 async function saveSettings(input) {
   const { settings: old = {}, me: oldMe } = await chrome.storage.local.get(["settings", "me"]);
   const nm = input.newMrs || old.newMrs || {};
+  const q = input.quiet || old.quiet || {};
   const url = String(input.url || "").trim().replace(/\/+$/, "");
   const settings = {
     url,
@@ -702,6 +746,12 @@ async function saveSettings(input) {
     token: String(input.token || "").trim() || (old.url === url && old.token) || "",
     interval: intervalOf({ interval: input.interval != null ? input.interval : old.interval }),
     lang: ["auto", "en", "de"].includes(input.lang) ? input.lang : old.lang || "auto",
+    quiet: {
+      enabled: !!q.enabled, weekend: !!q.weekend,
+      from: /^\d\d:\d\d$/.test(q.from) ? q.from : "19:00",
+      to: /^\d\d:\d\d$/.test(q.to) ? q.to : "08:00"
+    },
+    importantLabels: cleanList(input.importantLabels || old.importantLabels, "name"),
     ignoreUsers: cleanList((input.ignoreUsers || old.ignoreUsers || []).map((u) => ({ name: String(u.name || "").replace(/^@/, "").toLowerCase(), on: u.on })), "name"),
     newMrs: {
       enabled: !!nm.enabled,
@@ -736,6 +786,21 @@ function intervalOf(settings) {
   return INTERVALS.includes(n) ? n : DEFAULT_INTERVAL;
 }
 
+// Ruhezeit nach der Uhr dieses Rechners: „1 Std. stumm“ aus dem Popup,
+// das Zeitfenster aus den Einstellungen (darf über Mitternacht gehen) und
+// wahlweise das ganze Wochenende.
+function quietNow(settings, muteUntil, now) {
+  if (muteUntil && now < muteUntil) return true;
+  const q = settings && settings.quiet;
+  if (!q || !q.enabled) return false;
+  const d = new Date(now);
+  if (q.weekend && (d.getDay() === 0 || d.getDay() === 6)) return true;
+  const [from, to] = [q.from, q.to].map((s) => /^(\d\d):(\d\d)$/.exec(s || "")).map((m) => m && m[1] * 60 + Number(m[2]));
+  if (from == null || to == null || from === to) return false;
+  const min = d.getHours() * 60 + d.getMinutes();
+  return from < to ? min >= from && min < to : min >= from || min < to;
+}
+
 // create() ersetzt einen bestehenden Alarm gleichen Namens — neuer Takt gilt sofort.
 async function armAlarm(settings) {
   await chrome.alarms.create(POLL, { periodInMinutes: intervalOf(settings) });
@@ -767,7 +832,7 @@ chrome.notifications.onClicked.addListener(openEvent);
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   (async () => {
     if (msg.type === "status") {
-      const s = await chrome.storage.local.get(["settings", "me", "lastPoll", "error", "history", "nsResolved"]);
+      const s = await chrome.storage.local.get(["settings", "me", "lastPoll", "error", "history", "nsResolved", "muteUntil"]);
       const settings = s.settings || { url: "", token: "" };
       sendResponse({
         url: settings.url,
@@ -776,6 +841,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         langSetting: settings.lang || "auto", lang: langOf(settings.lang),
         newMrs: settings.newMrs || { enabled: false, namespaces: [], ignoreLabels: [] },
         ignoreUsers: settings.ignoreUsers || [],
+        importantLabels: settings.importantLabels || [],
+        quiet: settings.quiet || { enabled: false, from: "19:00", to: "08:00", weekend: false },
+        muteUntil: s.muteUntil > Date.now() ? s.muteUntil : 0,
+        quietNow: quietNow(settings, s.muteUntil, Date.now()),
         nsResolved: s.nsResolved || {},
         me: s.me, lastPoll: s.lastPoll, error: s.error, history: s.history || []
       });
@@ -791,6 +860,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       sendResponse({ ok: true });
     } else if (msg.type === "dismiss") {
       await dismiss(msg.ids || null); // null = alle
+      sendResponse({ ok: true });
+    } else if (msg.type === "mute") {
+      // Eigener Schlüssel, den pollNow() nicht schreibt — braucht kein serial().
+      await chrome.storage.local.set({ muteUntil: msg.minutes ? Date.now() + msg.minutes * 60000 : 0 });
       sendResponse({ ok: true });
     } else if (msg.type === "openAll") {
       sendResponse({ ok: true, tabs: await openAll() });

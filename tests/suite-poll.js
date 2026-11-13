@@ -608,3 +608,124 @@ RN.suite("Riesiger Kommentar blockiert die Abfrage nicht", async (t) => {
   t.eq(h.api.bodyText("**fett** und [Link](https://x)"), "fett und Link", "Kurzer Text unverändert bereinigt");
   h.dispose();
 });
+
+RN.suite("Zeit der Meldung: wann es passiert ist", async (t) => {
+  const h = await RN.loadBackground();
+  commentedOn(h, 5);
+  h.gl.mrs.push(mr(h, 5));
+  await h.warm();
+  h.advance(6 * 3600000); // Standby über Nacht
+  const at = h.now() - 5 * 3600000;
+  h.gl.mrs[0].updated_at = h.iso(at);
+  h.gl.notes["mr:10:5"] = [note(h, 11, h.other, "nachts", { created_at: h.iso(at) })];
+  h.gl.todos.push({ id: 7, action_name: "review_requested", target_type: "MergeRequest",
+    target: { iid: 9, title: "Review" }, project: { id: 10 }, author: h.other, created_at: h.iso(at - 60000) });
+  await h.api.poll();
+  const byTodo = (x) => h.state.history.find((e) => !!e.todo === x);
+  t.eq(byTodo(false) && byTodo(false).at, at, "Kommentar: Zeit des Kommentars, nicht der Abfrage");
+  t.eq(byTodo(true) && byTodo(true).at, at - 60000, "To-do: Zeit des To-dos");
+  t.ok(byTodo(true) && byTodo(true).todo === true, "To-do ist als solches markiert");
+  h.gl.todos.push({ id: 8, action_name: "mentioned", target_type: "Issue",
+    target: { iid: 4, title: "Zukunft" }, project: { id: 10 }, author: h.other, created_at: h.iso(h.now() + 3600000) });
+  h.advance(60000);
+  await h.api.poll();
+  t.eq(h.state.history[0].at, h.now(), "Zeit in der Zukunft (Uhrenversatz): Abfragezeit");
+  h.dispose();
+});
+
+RN.suite("Alle neuen Notizen, nicht nur die letzten 50", async (t) => {
+  const h = await RN.loadBackground();
+  commentedOn(h, 5);
+  h.gl.mrs.push(mr(h, 5));
+  await h.warm();
+  h.gl.mrs[0].updated_at = h.iso();
+  const list = [note(h, 100, h.other, "Wichtiger Kommentar", { created_at: h.iso(h.now() - 30000) })];
+  for (let i = 0; i < 180; i++) list.push(note(h, 200 + i, h.other, "added ~123 label", { system: true }));
+  h.gl.notes["mr:10:5"] = list;
+  await h.api.poll();
+  t.ok(h.state.history.some((e) => /Wichtiger Kommentar/.test(e.message)), "Kommentar hinter 180 Label-Notizen kommt an");
+  t.eq(h.state.items["mr:10:5"].noteId, 379, "noteId auf der neuesten Notiz");
+  const pagesRead = h.gl.calls.filter((c) => c.path === "projects/10/merge_requests/5/notes").length;
+  t.eq(pagesRead, 2, "Zwei Seiten gelesen, dann bei Bekanntem gestoppt");
+  h.dispose();
+});
+
+RN.suite("Ruhezeit", async (t) => {
+  const h = await RN.loadBackground();
+  const at = (d, hh, mm) => new Date(2026, 10, d, hh, mm).getTime(); // 13.11.2026 ist ein Freitag
+  const q = { quiet: { enabled: true, from: "19:00", to: "08:00", weekend: true } };
+  t.ok(h.api.quietNow(q, 0, at(13, 22, 0)), "22 Uhr: Ruhe (über Mitternacht)");
+  t.ok(h.api.quietNow(q, 0, at(13, 7, 59)), "7:59: noch Ruhe");
+  t.ok(!h.api.quietNow(q, 0, at(13, 8, 0)), "8:00: wieder Meldungen");
+  t.ok(h.api.quietNow(q, 0, at(14, 12, 0)), "Samstag mittag: Wochenende");
+  t.ok(!h.api.quietNow({ quiet: { enabled: false, from: "19:00", to: "08:00" } }, 0, at(13, 22, 0)), "Ausgeschaltet: keine Ruhe");
+  t.ok(h.api.quietNow({ quiet: { enabled: true, from: "12:00", to: "13:00" } }, 0, at(13, 12, 30)), "Fenster am Tag");
+  t.ok(h.api.quietNow({}, at(13, 13, 0), at(13, 12, 30)), "1 Std. stumm");
+
+  h.gl.todos.push({ id: 1, action_name: "assigned", target_type: "Issue",
+    target: { iid: 3, title: "Alt" }, project: { id: 11 }, author: h.other });
+  await h.warm();
+  h.state.muteUntil = h.now() + 3600000;
+  h.gl.todos.push({ id: 2, action_name: "mentioned", target_type: "Issue",
+    target: { iid: 4, title: "Leise" }, project: { id: 11 }, author: h.other, created_at: h.iso() });
+  await h.api.poll();
+  t.eq(shown(h).length, 0, "Stumm: nichts ploppt auf");
+  t.eq(h.state.history.length, 1, "aber im Verlauf");
+  t.eq(h.badge.text, "1", "und im Badge");
+  h.advance(2 * 3600000);
+  await h.api.poll();
+  const n = shown(h);
+  t.eq(n.length, 1, "Danach eine Sammelmeldung");
+  t.eq(n[0] && n[0].message, "Collected during your quiet time", "mit Hinweis auf die Ruhezeit");
+  t.ok(!h.state.held, "und nur einmal");
+
+  await h.api.saveSettings({ url: "https://gitlab.example.test", token: "", quiet: { enabled: true, from: "25:99x", to: "06:30", weekend: 1 } });
+  t.eq(JSON.stringify(h.state.settings.quiet), '{"enabled":true,"weekend":true,"from":"19:00","to":"06:30"}', "Ruhezeit gespeichert, Unsinn durch Standard ersetzt");
+  h.dispose();
+});
+
+RN.suite("Labels an der Meldung, gedeckelt", async (t) => {
+  const h = await RN.loadBackground();
+  t.eq(JSON.stringify(h.api.labelsOf(["bug", { name: "backend" }])), '["bug","backend"]', "Namen, auch aus Label-Objekten");
+  const real = ["Bug", "SLA-Relevant", "Ambulanzen (amb.Behandlungen)", "Heilmittel", "Feature", "QDVA"];
+  t.eq(h.api.labelsOf(real).join("|"), real.join("|"), "Echte Labels kommen vollständig an");
+  t.eq(h.api.labelsOf("abcdefghij".split("")).join(), "a,b,c,d,e,f,g,+3", "Mehr als 8: sieben und +N");
+  t.eq(h.api.labelsOf(["x".repeat(500)])[0].length, 40, "Sehr lange Labels gekürzt");
+  t.eq(JSON.stringify(h.api.labelsOf(null)), "[]", "Keine Labels: leer");
+
+  commentedOn(h, 5);
+  h.gl.mrs.push(mr(h, 5, { labels: ["workflow::in review", "bug"] }));
+  await h.warm();
+  h.gl.mrs[0].updated_at = h.iso();
+  h.gl.notes["mr:10:5"] = [note(h, 11, h.other, "Kommentar")];
+  h.gl.todos.push({ id: 3, action_name: "review_requested", target_type: "MergeRequest",
+    target: { iid: 9, title: "R", labels: ["frontend"] }, project: { id: 10 }, author: h.other, created_at: h.iso() });
+  await h.api.poll();
+  const find = (todo) => h.state.history.find((e) => !!e.todo === todo) || {};
+  t.eq((find(false).labels || []).join(), "workflow::in review,bug", "Kommentar-Meldung trägt die MR-Labels");
+  t.eq((find(true).labels || []).join(), "frontend", "To-do trägt die Labels des Ziels");
+  h.dispose();
+});
+
+RN.suite("Wichtige Labels", async (t) => {
+  const h = await RN.loadBackground({ state: { settings: { url: "https://gitlab.example.test", token: "glpat-test",
+    importantLabels: [{ name: "qdva", on: true }, { name: "Feature", on: false }] } } });
+  commentedOn(h, 5);
+  const many = ["a", "b", "c", "d", "e", "f", "g", "h", "i", "QDVA", "Feature"];
+  h.gl.mrs.push(mr(h, 5, { labels: many }));
+  await h.warm();
+  h.gl.mrs[0].updated_at = h.iso();
+  h.gl.notes["mr:10:5"] = [note(h, 11, h.other, "Kommentar")];
+  await h.api.poll();
+  const labels = h.state.history[0].labels;
+  t.eq(labels[0], "QDVA", "Wichtiges Label vorn, Groß/klein egal — fällt beim Kürzen nicht weg");
+  t.ok(!labels.includes("Feature"), "Ausgeschaltetes zählt nicht als wichtig");
+  t.eq(labels[labels.length - 1], "+4", "Rest weiter als +N");
+
+  await h.api.saveSettings({ url: "https://gitlab.example.test", token: "",
+    importantLabels: [{ name: " Bug ", on: true }, { name: "Bug", on: true }, { name: "", on: true }] });
+  t.eq(JSON.stringify(h.state.settings.importantLabels), '[{"name":"Bug","on":true}]', "Gespeichert, getrimmt, doppelte und leere raus");
+  await h.api.saveSettings({ url: "https://gitlab.example.test", token: "" });
+  t.eq(h.state.settings.importantLabels.length, 1, "Bleibt beim Speichern ohne Angabe erhalten");
+  h.dispose();
+});

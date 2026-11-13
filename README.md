@@ -46,6 +46,12 @@ The settings page opens after installation:
 - **Token:** personal access token of your own account, scope `read_api`.
 - **Interval:** 1–30 minutes, default 1.
 - **Language:** English or German, default follows the browser language.
+- **Quiet time** (optional): a time window (may span midnight) and/or the
+  whole weekend without pop-ups, by your computer's clock. Everything still
+  lands in the list and the badge; afterwards you get one summary. The bell in
+  the popup mutes for an hour.
+- **Important labels** (optional): highlighted in the popup list and always
+  shown first.
 - **New MRs** (optional): group or project paths, labels to ignore (e.g.
   `dependencies`).
 
@@ -58,6 +64,10 @@ first run only records the current state and doesn't notify.
   notification (comments, pushes, approval + merge); 6 or more notifications at
   once become a single summary.
 - Your own actions are never reported. Mentions arrive as a todo, not twice.
+- To-dos (review requests, mentions, failed pipelines …) are pinned to the top
+  of the popup, followed by a stronger divider. Times show when it happened in GitLab, not
+  when it was checked. Labels appear as small chips on one line; the rest
+  is counted as “+N”.
 - After sleep or a closed browser it catches up from the last successful poll.
   Short network hiccups stay silent.
 - About 10–20 mostly empty requests per run (`updated_after`).

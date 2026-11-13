@@ -5,6 +5,35 @@ anheben: größere neue Funktion → Minor (0.**x**.0), Fehlerbehebung oder
 kleine Ergänzung wie ein Link → Patch (0.x.**y**). Danach
 `python firefox.py` neu laufen lassen.
 
+## 0.6.0 — 2026-11-13
+
+- **Ruhezeit:** in den Einstellungen ein Zeitfenster (auch über Mitternacht)
+  und/oder das ganze Wochenende ohne Pop-ups, nach der Uhr des Rechners.
+  Meldungen landen weiter in Liste und Badge; danach kommt eine
+  Sammelmeldung. Die Glocke im Popup schaltet für eine Stunde stumm.
+- **Für dich zuerst:** To-dos (Review-Anfrage, Erwähnung, rote Pipeline …)
+  stehen im Popup oben, getrennt durch eine kräftigere Linie.
+- **Labels in der Liste:** die Labels des MRs/Issues als kleine Umriss-Chips
+  hinter der Zeit, immer genau eine Zeile: was nicht passt, wird als „+N“
+  gezählt statt halb abgeschnitten; alle stehen im Tooltip. Gespeichert
+  werden höchstens 8 (je 40 Zeichen), damit der Verlauf klein bleibt.
+  Meldungen von vor dem Update haben keine.
+- **Wichtige Labels:** in den Einstellungen eine Liste (Groß/klein egal, an/aus
+  pro Eintrag). Solche Labels stehen an jeder Meldung vorn, sind gefüllt, fett
+  und in Akzentfarbe hervorgehoben und fallen beim Kürzen nie zuerst weg.
+  Passt eins doch nicht mehr in die Zeile, wird das „+N“ hervorgehoben.
+- Popup-Feinschliff nach Design-Review: wichtige Labels mit dunkler Schrift
+  (10,8:1 statt 4,1:1); die Glocke ist ein Knopf ohne Füllung in voller
+  Deckkraft (vorher 2,5:1, wirkte deaktiviert) und hebt sich so vom
+  Prüfen-Knopf ab; ältere Zeiten kurz („12.11., 12:32“), damit Labels Platz
+  haben.
+- **Echte Zeitpunkte:** Meldungen zeigen, wann es in GitLab passiert ist, nicht
+  wann geprüft wurde — nach dem Standby steht der Kommentar von 3 Uhr nicht
+  mehr auf „gerade eben“. Ältere mit Uhrzeit, die genaue Zeit im Tooltip.
+- **Keine Kommentare mehr verloren:** statt nur der letzten 50 Notizen pro MR
+  wird geblättert, bis Bekanntes kommt (höchstens 1000). Nach einer lauten
+  Nacht mit vielen Pushes und Label-Änderungen fehlten sonst Kommentare.
+
 ## 0.5.1 — 2026-11-13
 
 - **Sicherheit:** Beim Speichern mit leerem Token-Feld wird der alte Token nur

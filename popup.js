@@ -13,7 +13,36 @@ function ago(ms) {
   if (min < 60) return t("minAgo", { n: min });
   const h = Math.round(min / 60);
   if (h < 24) return t("hAgo", { n: h });
-  return new Date(ms).toLocaleDateString(L, { day: "numeric", month: "short" });
+  // Kurz („12.11., 12:32“), damit in der Zeile Platz für Labels bleibt.
+  return new Date(ms).toLocaleString(L, { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+}
+
+function clock(ms) {
+  return new Date(ms).toLocaleTimeString(L, { hour: "2-digit", minute: "2-digit" });
+}
+
+// Labels, die nicht mehr in die Zeile passen, umbrechen in die abgeschnittene
+// zweite Zeile. Die nehmen wir raus und zeigen stattdessen „+N“ — passt das
+// selbst nicht mehr, muss noch ein Label davor weichen.
+function fitLabels(row) {
+  const top = row.getBoundingClientRect().top + 4;
+  const wraps = (c) => c.getBoundingClientRect().top > top;
+  const worth = (c) => (/^\+\d+$/.test(c.textContent) ? Number(c.textContent.slice(1)) : 1);
+  let hidden = 0;
+  let hotHidden = false; // steckt ein wichtiges Label im „+N“, wird es selbst hervorgehoben
+  const drop = (c) => { hidden += worth(c); hotHidden = hotHidden || c.classList.contains("hot"); c.remove(); };
+  for (const c of row.querySelectorAll(".label")) if (wraps(c)) drop(c);
+  if (!hidden) return;
+  const plus = document.createElement("span");
+  row.appendChild(plus);
+  for (;;) {
+    plus.textContent = "+" + hidden;
+    plus.className = "label" + (hotHidden ? " hot" : "");
+    const chips = row.querySelectorAll(".label");
+    if (!wraps(plus) || chips.length < 2) break;
+    drop(chips[chips.length - 2]);
+  }
+  plus.title = row.closest("a").title.split("\n").pop(); // alle Labels
 }
 
 // Sofort aus der Liste nehmen, nicht erst auf den Service Worker warten.
@@ -47,6 +76,16 @@ function render(status) {
   // Ohne Token gibt es nichts zu prüfen — und „Noch nichts Neues“ wäre gelogen.
   document.getElementById("check").disabled = !status.hasToken;
 
+  // Glocke: manuell stumm -> Klick hebt auf; sonst Klick = 1 Stunde stumm.
+  const mute = document.getElementById("mute");
+  const label = status.muteUntil ? t("mutedUntil", { time: clock(status.muteUntil) })
+    : status.quietNow ? t("quietActive") : t("mute");
+  mute.classList.toggle("quiet", !!status.quietNow);
+  mute.setAttribute("aria-pressed", String(!!status.muteUntil));
+  mute.title = label;
+  mute.setAttribute("aria-label", label);
+  mute.hidden = !status.hasToken;
+
   // Sprung zur MR-Übersicht in GitLab (zugewiesen, Review, eigene).
   const mrLink = document.getElementById("mrLink");
   const base = /^https:\/\//i.test(status.url || "") ? status.url : null;
@@ -56,17 +95,34 @@ function render(status) {
   const list = document.getElementById("list");
   list.textContent = "";
   shownIds = status.history.map((e) => e.id);
-  for (const e of status.history) {
+  const hot = new Set((status.importantLabels || []).filter((l) => l.on).map((l) => l.name.toLowerCase()));
+  // To-dos (Review-Anfrage, Erwähnung, rote Pipeline …) warten auf dich: nach oben.
+  const ordered = status.history.filter((e) => e.todo).concat(status.history.filter((e) => !e.todo));
+  const firstRest = ordered.find((e) => !e.todo);
+  for (const e of ordered) {
     const li = document.createElement("li");
     const a = document.createElement("a");
     a.className = "event" + (e.read ? "" : " unread");
     a.href = e.url || "#";
-    a.title = e.title + (e.message ? "\n" + e.message : ""); // Titel ist einzeilig gekürzt
+    // Titel ist einzeilig gekürzt; dazu die genaue Zeit.
+    a.title = e.title + (e.message ? "\n" + e.message : "") + "\n" + new Date(e.at).toLocaleString(L) +
+      (Array.isArray(e.labels) && e.labels.length ? "\n" + e.labels.join(", ") : "");
     for (const [cls, text] of [["title", e.title], ["message", e.message], ["when", ago(e.at)]]) {
       const div = document.createElement("div");
       div.className = cls;
       div.textContent = text;
       a.appendChild(div);
+    }
+    if (e === firstRest && ordered[0].todo) li.className = "rest-start"; // Linie nach dem letzten To-do
+    // Labels leise hinter der Zeit; was nicht in die Zeile passt, wird abgeschnitten.
+    // Wichtige zuerst (auch bei Meldungen von vor der Einstellung) — fitLabels kürzt von hinten.
+    const labels = (Array.isArray(e.labels) ? e.labels : []).slice(0, 8).map(String);
+    labels.sort((x, y) => hot.has(y.toLowerCase()) - hot.has(x.toLowerCase()));
+    for (const name of labels) {
+      const chip = document.createElement("span");
+      chip.className = "label" + (hot.has(name.toLowerCase()) ? " hot" : "");
+      chip.textContent = chip.title = String(name);
+      a.lastChild.appendChild(chip);
     }
     a.addEventListener("click", (ev) => {
       ev.preventDefault();
@@ -90,6 +146,7 @@ function render(status) {
 
     li.append(a, x);
     list.appendChild(li);
+    fitLabels(a.lastChild); // erst im DOM lässt sich messen
   }
   const empty = status.history.length === 0;
   document.getElementById("empty").hidden = !empty || !status.hasToken;
@@ -110,6 +167,12 @@ document.getElementById("check").addEventListener("click", async (ev) => {
   await chrome.runtime.sendMessage({ type: "pollNow" });
   btn.classList.remove("busy");
   await refresh(); // setzt disabled passend zum Token zurück
+});
+
+document.getElementById("mute").addEventListener("click", async (ev) => {
+  const on = ev.currentTarget.getAttribute("aria-pressed") === "true";
+  await chrome.runtime.sendMessage({ type: "mute", minutes: on ? 0 : 60 });
+  await refresh();
 });
 
 document.getElementById("clearAll").addEventListener("click", async () => {

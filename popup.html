@@ -15,11 +15,23 @@
 
   .head { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
   .head .eyebrow { flex: 1; font-size: 12px; letter-spacing: 0.16em; font-weight: 700; } /* bewusst klein: Marke, kein Lesetext */
-  #check {
+  #check, #mute {
     width: 24px; height: 24px; padding: 0; /* so hoch wie die .mark-Plakette links */
     display: flex; align-items: center; justify-content: center;
   }
-  #check svg { width: 13px; height: 13px; display: block; }
+  #check svg, #mute svg { width: 13px; height: 13px; display: block; }
+  /* Glocke: Nebenknopf ohne Füllung, damit „Jetzt prüfen“ die einzige Pille
+     bleibt. Durchgestrichen und hervorgehoben, solange still ist. */
+  #mute {
+    border: 1px solid var(--line); border-radius: 999px;
+    background: transparent; color: var(--muted); cursor: pointer;
+  }
+  #mute:hover { color: var(--accent-ink); background: var(--hover); }
+  #mute:focus-visible { outline: 3px solid var(--mint); outline-offset: 2px; }
+  #mute .slash { display: none; }
+  #mute.quiet { color: var(--ink); background: var(--tally-bg); border-color: var(--accent-ink); }
+  #mute.quiet .slash { display: inline; }
+  #mute[hidden] { display: none; }
   /* Dreht sich, solange geprüft wird (busy); ohne Token nur ausgegraut (disabled). */
   #check.busy svg { animation: spin 0.8s linear infinite; }
   #check:disabled:not(.busy) { cursor: not-allowed; }
@@ -53,7 +65,24 @@
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .message { font-size: 14px; line-height: 1.4; color: var(--muted); margin-top: 2px;
     display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-  .when { font-size: 14px; color: var(--muted-2); margin-top: 2px; }
+  /* Genau eine Zeile: Labels, die nicht mehr passen, brechen in eine zweite
+     Zeile um, die abgeschnitten ist — sie fehlen ganz statt halb. Alle stehen im Tooltip. */
+  .when { font-size: 14px; color: var(--muted-2); margin-top: 2px;
+    display: flex; flex-wrap: wrap; align-items: center; column-gap: 4px;
+    line-height: 20px; height: 20px; overflow: hidden; white-space: nowrap; }
+  /* Labels: klein, nur Umriss; ein sehr langes wird mit … gekürzt. */
+  .when .label {
+    flex: 0 0 auto; max-width: 160px;
+    overflow: hidden; text-overflow: ellipsis;
+    font-size: 12px; line-height: 16px; padding: 0 6px;
+    border: 1px solid var(--line); border-radius: 8px; color: var(--muted);
+  }
+  .when .label:first-of-type { margin-left: 4px; }
+  /* Wichtige Labels (Einstellungen): gefüllt, fett, Akzent am Rand — nicht nur Farbe.
+     Schrift dunkel: --accent-ink auf --tally-bg wären nur 4,1:1, --ink sind 10,8:1. */
+  .when .label.hot { background: var(--tally-bg); border-color: var(--accent-ink); color: var(--ink); font-weight: 700; }
+  /* To-dos stehen oben; nach dem letzten eine kräftigere Linie. */
+  li.rest-start { border-top: 2px solid var(--ghost-line); }
 
   /* Wegdrücken: unaufdringlich, beim Überfahren der Zeile deutlicher. */
   button.x {
@@ -98,6 +127,11 @@
       </svg>
     </div>
     <span class="eyebrow">GitLab Real Notify</span>
+    <button type="button" id="mute" aria-pressed="false" title="Mute for 1 hour" aria-label="Mute for 1 hour" data-i18n-title="mute" data-i18n-aria="mute">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z" /><path d="M10 20.5a2 2 0 0 0 4 0" /><path class="slash" d="M4 4l16 16" />
+      </svg>
+    </button>
     <button class="pill" id="check" title="Check now" aria-label="Check now" data-i18n-title="checkNow" data-i18n-aria="checkNow">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <path d="M20 12a8 8 0 1 1-2.34-5.66" /><path d="M20 4v5h-5" />
