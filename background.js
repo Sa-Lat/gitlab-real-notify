@@ -59,10 +59,10 @@ function tx(key, vars) {
 // entfernen“ als deine. Setzen pollNow() und dismissDone() über loadIgnored().
 let ignored = new Set();
 // Wichtige Labels (Einstellungen): stehen an der Meldung vorn und fallen beim Kürzen nie weg.
-let important = new Set();
+let isImportant = () => false;
 function loadIgnored(settings) {
   ignored = new Set(((settings && settings.ignoreUsers) || []).filter((u) => u.on).map((u) => u.name.toLowerCase()));
-  important = new Set(((settings && settings.importantLabels) || []).filter((l) => l.on).map((l) => l.name.toLowerCase()));
+  isImportant = importantMatcher(settings && settings.importantLabels); // mit * als Platzhalter
 }
 function muted(user) {
   return !!user && ignored.has(String(user.username || "").toLowerCase());
@@ -158,7 +158,7 @@ function plain(text, max) {
 // egal wie viele Labels ein MR hat. Was in die Zeile passt, misst das Popup.
 const LABELS_MAX = 8;
 function labelsOf(list) {
-  const hot = (n) => important.has(n.toLowerCase());
+  const hot = (n) => isImportant(n);
   const names = (Array.isArray(list) ? list : [])
     .map((l) => String((typeof l === "string" ? l : l && l.name) || "").trim()).filter(Boolean)
     .sort((a, b) => hot(b) - hot(a)) // wichtige zuerst, sonst Reihenfolge wie in GitLab

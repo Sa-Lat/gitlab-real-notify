@@ -215,12 +215,12 @@
       <label for="hotInput" data-i18n="hotLabel">Important labels</label>
       <ul class="rows" id="hotList"></ul>
       <div class="add">
-        <div class="field"><input id="hotInput" list="lblSuggest" spellcheck="false" placeholder="e.g. Bug" data-i18n-placeholder="hotPlaceholder"
+        <div class="field"><input id="hotInput" list="lblSuggest" spellcheck="false" placeholder="e.g. Bug or workflow::*" data-i18n-placeholder="hotPlaceholder"
                                   aria-describedby="hotHint" /></div>
         <button type="button" id="hotAdd" data-i18n="add">Add</button>
       </div>
       <p class="feldhinweis" id="hotHint" data-i18n="hotHint">Highlighted in the popup list and always shown first.
-        Unchecked: paused.</p>
+        * matches anything, e.g. workflow::* or *SLA*. Unchecked: paused.</p>
     </section>
 
     <section class="block">

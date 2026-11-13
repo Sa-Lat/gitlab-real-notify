@@ -80,8 +80,8 @@ const I18N = {
     lblLabel: "Ignore labels",
     userLabel: "Alternative bot users",
     hotLabel: "Important labels",
-    hotPlaceholder: "e.g. Bug",
-    hotHint: "Highlighted in the popup list and always shown first, even when not all labels fit. Unchecked: paused.",
+    hotPlaceholder: "e.g. Bug or workflow::*",
+    hotHint: "Highlighted in the popup list and always shown first, even when not all labels fit. * matches anything, e.g. workflow::* or *SLA*. Case doesn’t matter. Unchecked: paused.",
     quietHead: "Quiet time",
     quietFrom: "From",
     quietTo: "To",
@@ -177,8 +177,8 @@ const I18N = {
     lblLabel: "Labels ignorieren",
     userLabel: "Alternative Bot-Nutzer",
     hotLabel: "Wichtige Labels",
-    hotPlaceholder: "z. B. Bug",
-    hotHint: "Werden in der Popup-Liste hervorgehoben und immer zuerst gezeigt, auch wenn nicht alle Labels passen. Ohne Häkchen: pausiert.",
+    hotPlaceholder: "z. B. Bug oder workflow::*",
+    hotHint: "Werden in der Popup-Liste hervorgehoben und immer zuerst gezeigt, auch wenn nicht alle Labels passen. * steht für beliebige Zeichen, z. B. workflow::* oder *SLA*. Groß/klein egal. Ohne Häkchen: pausiert.",
     quietHead: "Ruhezeit",
     quietFrom: "Von",
     quietTo: "Bis",
@@ -223,4 +223,30 @@ function applyI18n(lang) {
   for (const el of document.querySelectorAll("[data-i18n-placeholder]")) el.placeholder = tr(lang, el.dataset.i18nPlaceholder);
   for (const el of document.querySelectorAll("[data-i18n-title]")) el.title = tr(lang, el.dataset.i18nTitle);
   for (const el of document.querySelectorAll("[data-i18n-aria]")) el.setAttribute("aria-label", tr(lang, el.dataset.i18nAria));
+}
+
+// ---------- Gemeinsam: wichtige Labels ----------
+// Service Worker und Popup laden diese Datei ohnehin — deshalb liegt der
+// Vergleich hier statt doppelt.
+
+// „*“ steht für beliebig viele Zeichen, Groß/klein egal: „workflow::*“, „*SLA*“.
+// Ohne RegExp: viele Sterne auf langen Labels können so nicht ausufern.
+function globMatch(pattern, text) {
+  const p = String(pattern).toLowerCase();
+  const s = String(text).toLowerCase();
+  let pi = 0, si = 0, star = -1, from = 0;
+  while (si < s.length) {
+    if (pi < p.length && p[pi] === s[si]) { pi++; si++; }
+    else if (pi < p.length && p[pi] === "*") { star = pi++; from = si; }
+    else if (star >= 0) { pi = star + 1; si = ++from; } // Stern frisst ein Zeichen mehr
+    else return false;
+  }
+  while (p[pi] === "*") pi++;
+  return pi === p.length;
+}
+
+// importantLabels aus den Einstellungen -> Prüffunktion für einen Label-Namen.
+function importantMatcher(list) {
+  const pats = (Array.isArray(list) ? list : []).filter((l) => l && l.on && l.name).map((l) => String(l.name));
+  return (name) => pats.some((p) => globMatch(p, name));
 }

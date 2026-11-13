@@ -5,6 +5,12 @@ anheben: größere neue Funktion → Minor (0.**x**.0), Fehlerbehebung oder
 kleine Ergänzung wie ein Link → Patch (0.x.**y**). Danach
 `python firefox.py` neu laufen lassen.
 
+## 0.6.1 — 2026-11-13
+
+- **Wichtige Labels mit Platzhalter:** `*` steht für beliebig viele Zeichen,
+  Groß/klein egal — z. B. `workflow::*` für alle Workflow-Stufen oder `*SLA*`.
+  Ohne RegExp verglichen, damit viele Sterne auf langen Labels nicht ausufern.
+
 ## 0.6.0 — 2026-11-13
 
 - **Ruhezeit:** in den Einstellungen ein Zeitfenster (auch über Mitternacht)

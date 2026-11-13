@@ -95,7 +95,7 @@ function render(status) {
   const list = document.getElementById("list");
   list.textContent = "";
   shownIds = status.history.map((e) => e.id);
-  const hot = new Set((status.importantLabels || []).filter((l) => l.on).map((l) => l.name.toLowerCase()));
+  const hot = importantMatcher(status.importantLabels); // „workflow::*“ usw.
   // To-dos (Review-Anfrage, Erwähnung, rote Pipeline …) warten auf dich: nach oben.
   const ordered = status.history.filter((e) => e.todo).concat(status.history.filter((e) => !e.todo));
   const firstRest = ordered.find((e) => !e.todo);
@@ -117,10 +117,10 @@ function render(status) {
     // Labels leise hinter der Zeit; was nicht in die Zeile passt, wird abgeschnitten.
     // Wichtige zuerst (auch bei Meldungen von vor der Einstellung) — fitLabels kürzt von hinten.
     const labels = (Array.isArray(e.labels) ? e.labels : []).slice(0, 8).map(String);
-    labels.sort((x, y) => hot.has(y.toLowerCase()) - hot.has(x.toLowerCase()));
+    labels.sort((x, y) => hot(y) - hot(x));
     for (const name of labels) {
       const chip = document.createElement("span");
-      chip.className = "label" + (hot.has(name.toLowerCase()) ? " hot" : "");
+      chip.className = "label" + (hot(name) ? " hot" : "");
       chip.textContent = chip.title = String(name);
       a.lastChild.appendChild(chip);
     }

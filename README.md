@@ -51,7 +51,7 @@ The settings page opens after installation:
   lands in the list and the badge; afterwards you get one summary. The bell in
   the popup mutes for an hour.
 - **Important labels** (optional): highlighted in the popup list and always
-  shown first.
+  shown first. `*` is a wildcard, e.g. `workflow::*`.
 - **New MRs** (optional): group or project paths, labels to ignore (e.g.
   `dependencies`).
 

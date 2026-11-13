@@ -729,3 +729,28 @@ RN.suite("Wichtige Labels", async (t) => {
   t.eq(h.state.settings.importantLabels.length, 1, "Bleibt beim Speichern ohne Angabe erhalten");
   h.dispose();
 });
+
+RN.suite("Wichtige Labels mit Platzhalter", async (t) => {
+  const h = await RN.loadBackground();
+  const g = h.api.globMatch;
+  t.ok(g("workflow::*", "Workflow::In Review"), "workflow::* trifft, Groß/klein egal");
+  t.ok(!g("workflow::*", "my-workflow::x"), "Ohne Stern vorn muss es am Anfang passen");
+  t.ok(g("*SLA*", "Prio-SLA-Relevant"), "*SLA* trifft mittendrin");
+  t.ok(g("*", "irgendwas") && g("Bug", "bug") && !g("Bug", "Bugfix"), "* trifft alles, ohne Stern genau");
+  t.ok(g("a*b*c", "a-x-b-y-c") && !g("a*b*c", "a-x-c-y-b"), "Mehrere Sterne, Reihenfolge zählt");
+  const t0 = performance.now();
+  g("*a*a*a*a*a*a*a*a*b", "a".repeat(255));
+  t.ok(performance.now() - t0 < 50, "Viele Sterne auf 255 Zeichen: schnell", Math.round(performance.now() - t0) + " ms");
+  const hot = h.api.importantMatcher([{ name: "workflow::*", on: true }, { name: "Bug", on: false }]);
+  t.ok(hot("workflow::done") && !hot("Bug"), "Matcher: nur eingeschaltete");
+
+  h.state.settings.importantLabels = [{ name: "*sla*", on: true }];
+  commentedOn(h, 5);
+  h.gl.mrs.push(mr(h, 5, { labels: ["a", "b", "c", "d", "e", "f", "g", "h", "SLA-Relevant"] }));
+  await h.warm();
+  h.gl.mrs[0].updated_at = h.iso();
+  h.gl.notes["mr:10:5"] = [note(h, 11, h.other, "Kommentar")];
+  await h.api.poll();
+  t.eq(h.state.history[0].labels[0], "SLA-Relevant", "Treffer per Platzhalter steht vorn und fällt nicht weg");
+  h.dispose();
+});
