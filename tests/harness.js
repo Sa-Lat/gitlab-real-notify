@@ -55,10 +55,25 @@ const RN = (function () {
       if ((m = path.match(/^(groups|projects)\/(\d+)\/labels$/))) {
         return (gl.labels[m[1].slice(0, -1) + ":" + m[2]] || []).map((name) => ({ name }));
       }
-      if ((m = path.match(/^projects\/(\d+)\/(merge_requests|issues)$/))) {
+      if ((m = path.match(/^projects\/([^/]+)\/(merge_requests|issues)$/))) {
         const iids = q.getAll("iids[]").map(Number);
+        const pid = /^\d+$/.test(m[1]) ? Number(m[1]) : byIdOrPath(gl.projects, "path_with_namespace", m[1]).id;
+        if (pid == null) return NOT_FOUND;
         return (m[2] === "merge_requests" ? gl.mrs : gl.issues).filter((x) =>
-          x.project_id === Number(m[1]) && (!iids.length || iids.includes(x.iid)) && fresh(x));
+          x.project_id === pid && (!iids.length || iids.includes(x.iid)) && fresh(x));
+      }
+      // Threads: Notizen mit gleicher discussion_id gehören zusammen, ohne steht jede allein.
+      if ((m = path.match(/^projects\/([^/]+)\/(merge_requests|issues)\/(\d+)\/discussions$/))) {
+        const p = byIdOrPath(gl.projects, "path_with_namespace", m[1]);
+        if (p === NOT_FOUND) return NOT_FOUND;
+        const notes = gl.notes[(m[2] === "merge_requests" ? "mr" : "issue") + ":" + p.id + ":" + m[3]] || [];
+        const threads = new Map();
+        for (const n of notes.slice().sort((a, b) => a.id - b.id)) {
+          const id = n.discussion_id || "d" + n.id;
+          if (!threads.has(id)) threads.set(id, { id, individual_note: !n.discussion_id, notes: [] });
+          threads.get(id).notes.push(n);
+        }
+        return [...threads.values()];
       }
       if ((m = path.match(/^projects\/(\d+)\/(merge_requests|issues)\/(\d+)\/notes$/))) {
         const kind = m[2] === "merge_requests" ? "mr" : "issue";

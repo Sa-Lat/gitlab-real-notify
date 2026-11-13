@@ -20,8 +20,7 @@ function drop(li) {
   li.remove();
   const empty = !document.querySelector("#list li");
   document.getElementById("empty").hidden = !empty;
-  document.getElementById("clearAll").hidden = empty;
-  document.getElementById("sep").hidden = empty;
+  document.getElementById("tools").hidden = empty;
 }
 
 function openOptions(ev) {
@@ -92,8 +91,7 @@ function render(status) {
   }
   const empty = status.history.length === 0;
   document.getElementById("empty").hidden = !empty || !status.hasToken;
-  document.getElementById("clearAll").hidden = empty;
-  document.getElementById("sep").hidden = empty;
+  document.getElementById("tools").hidden = empty;
   document.getElementById("last").textContent = status.lastPoll
     ? ago(status.lastPoll) + (status.me ? " · @" + status.me.username : "")
     : "";
@@ -115,6 +113,29 @@ document.getElementById("check").addEventListener("click", async (ev) => {
 document.getElementById("clearAll").addEventListener("click", async () => {
   document.querySelectorAll("#list li").forEach(drop);
   await chrome.runtime.sendMessage({ type: "dismiss" });
+});
+
+// Öffnet alles in Hintergrund-Tabs; der Service Worker räumt die Liste ab.
+document.getElementById("openAll").addEventListener("click", async () => {
+  await chrome.runtime.sendMessage({ type: "openAll" });
+  await refresh();
+});
+
+// Fragt GitLab, was inzwischen gemergt oder geschlossen ist, und räumt das ab.
+document.getElementById("clearDone").addEventListener("click", async (ev) => {
+  const btn = ev.currentTarget;
+  const check = document.getElementById("check"); // dreht sich mit: GitLab wird gefragt
+  btn.disabled = check.disabled = true;
+  check.classList.add("busy");
+  const res = await chrome.runtime.sendMessage({ type: "dismissDone" });
+  check.classList.remove("busy");
+  await refresh(); // setzt check.disabled passend zum Token zurück
+  btn.disabled = false;
+  if (!res.ok) {
+    const err = document.getElementById("error");
+    err.textContent = res.error;
+    err.hidden = false;
+  }
 });
 
 document.getElementById("optionsLink").addEventListener("click", openOptions);

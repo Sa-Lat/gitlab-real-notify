@@ -5,6 +5,33 @@ anheben: größere neue Funktion → Minor (0.**x**.0), Fehlerbehebung oder
 kleine Ergänzung wie ein Link → Patch (0.x.**y**). Danach
 `python firefox.py` neu laufen lassen.
 
+## 0.5.0 — 2026-11-13
+
+- **Erledigte entfernen:** neuer Button im Popup nimmt alle Meldungen zu MRs
+  und Issues raus, die inzwischen gemergt oder geschlossen sind. Fragt dafür
+  GitLab live nach dem Stand (eine Anfrage pro Projekt, nur lesend), damit nur
+  noch Offenes übrig bleibt. Meldungen ohne MR/Issue-Link bleiben stehen.
+- Dabei fliegen auch **beantwortete Kommentare** raus: Thread aufgelöst oder
+  du hast im Thread danach geantwortet. Bei einem Einzelkommentar ohne Thread
+  zählt jede spätere Antwort von dir im selben MR/Issue. Kostet eine Anfrage
+  pro offenem MR/Issue mit Kommentar-Meldung.
+- Außerdem fliegen „Neuer MR in …“-Meldungen raus, sobald der MR einen
+  Reviewer hat — dann kümmert sich schon jemand. Andere Meldungen zu MRs mit
+  Reviewer (etwa Kommentare in deinen eigenen) bleiben.
+- Gebündelte Meldungen (ein Review mit mehreren Anmerkungen) merken sich alle
+  ihre Kommentare und verschwinden erst, wenn jeder davon erledigt ist.
+  Meldungen von vor 0.5.0 kennen nur den verlinkten ersten Kommentar.
+- **Alternative Bot-Nutzer:** neue Liste in den Einstellungen für Konten, die
+  für dich handeln (z. B. ein Bot, der in deinem Namen kommentiert). Von ihnen
+  kommen keine Meldungen mehr (Kommentare, To-dos, Merges/Schließen, neue
+  MRs), und ihre Antworten zählen bei „Erledigte entfernen“ als deine.
+  Eingabe mit oder ohne @, auch als Profil-Link; ohne Häkchen pausiert.
+- **Alle öffnen:** öffnet jede Meldung mit Link in einem Hintergrund-Tab,
+  einen Tab pro MR/Issue (mit dem Link der neuesten Meldung), älteste zuerst.
+  Wie beim Klick auf eine Meldung verschwinden sie danach aus dem Verlauf.
+- „Alle öffnen“, „Erledigte entfernen“ und „Alle entfernen“ stehen jetzt in einer eigenen
+  Zeile unter der Liste.
+
 ## 0.4.1 — 2026-10-30
 
 - **Eine Meldung pro MR/Issue und Abfrage:** Statuswechsel, Kommentare und

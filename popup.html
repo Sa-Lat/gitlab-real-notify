@@ -76,6 +76,10 @@
 
   .empty { font-size: 14px; color: var(--muted); padding: 18px 0; text-align: center; }
 
+  /* Aufräumen: eigene Zeile, in der Fußzeile ist auf Deutsch kein Platz. */
+  .tools { font-size: 12px; color: var(--muted-2); text-align: right; margin-top: 6px; }
+  .tools[hidden] { display: none; }
+
   .foot {
     display: flex; justify-content: space-between; gap: 8px;
     font-size: 12px; color: var(--muted-2); /* bewusst klein: Nebeninfo, wie der Schriftzug oben */
@@ -105,9 +109,15 @@
   <ul id="list"></ul>
   <p class="empty" id="empty" hidden data-i18n="nothingNew">Nothing new yet</p>
 
+  <div class="tools" id="tools" hidden>
+    <button type="button" class="link" id="openAll" data-i18n="openAll" data-i18n-title="openAllHint" title="Open every notification in a background tab and remove it from the list">Open all</button> ·
+    <button type="button" class="link" id="clearDone" data-i18n="clearDone" data-i18n-title="clearDoneHint" title="Remove notifications for merged or closed MRs and issues, resolved threads, comments you (or your bot) have replied to, and new MRs that already have a reviewer">Clear done</button> ·
+    <button type="button" class="link" id="clearAll" data-i18n="clearAll">Clear all</button>
+  </div>
+
   <div class="foot">
     <span id="last"></span>
-    <span><button type="button" class="link" id="clearAll" hidden data-i18n="clearAll">Clear all</button><span id="sep" hidden> · </span><a id="mrLink" href="#" target="_blank" rel="noopener" hidden data-i18n="mrList">MR list</a><span id="mrSep" hidden> · </span><a href="#" id="optionsLink" data-i18n="settings">Settings</a></span>
+    <span><a id="mrLink" href="#" target="_blank" rel="noopener" hidden data-i18n="mrList">MR list</a><span id="mrSep" hidden> · </span><a href="#" id="optionsLink" data-i18n="settings">Settings</a></span>
   </div>
 
   <script src="i18n.js"></script>

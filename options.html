@@ -188,6 +188,19 @@
       </div>
     </div>
 
+    <section class="block">
+      <label for="userInput" data-i18n="userLabel">Alternative bot users</label>
+      <ul class="rows" id="userList"></ul>
+      <div class="add">
+        <div class="field"><input id="userInput" spellcheck="false" placeholder="e.g. @claude-bot" data-i18n-placeholder="userPlaceholder"
+                                  aria-describedby="userHint" /></div>
+        <button type="button" id="userAdd" data-i18n="add">Add</button>
+      </div>
+      <p class="feldhinweis" id="userHint" data-i18n="userHint">Accounts that act for you, e.g. a bot commenting on
+        your behalf. Nothing they do is notified (comments, to-dos, merges, new MRs), and their replies count as
+        yours for “Clear done”. Unchecked: paused.</p>
+    </section>
+
     <section class="block" aria-labelledby="mrHead">
       <label class="switch"><input type="checkbox" id="mrOn" aria-describedby="mrHint" />
         <span id="mrHead" data-i18n="mrHead">Notify about new MRs</span></label>

@@ -38,6 +38,7 @@ function relabel() {
 // Neue MRs: Listen mit an/aus pro Eintrag. Gespeichert wird mit „Speichern & prüfen“.
 let namespaces = [];   // [{ path, on }]
 let ignoreLabels = []; // [{ name, on }]
+let ignoreUsers = [];  // [{ name, on }], Benutzername ohne @
 let resolved = {};     // path -> { kind, id } | null (nicht gefunden)
 
 function cleanUrl(s) {
@@ -128,6 +129,7 @@ function renderMr() {
   document.getElementById("mrBox").hidden = !mrOn.checked;
   renderRows(document.getElementById("nsList"), namespaces, "path", nsTag);
   renderRows(document.getElementById("lblList"), ignoreLabels, "name");
+  renderRows(document.getElementById("userList"), ignoreUsers, "name");
 }
 
 function wireAdd(inputId, buttonId, add) {
@@ -153,7 +155,15 @@ function addLabel(raw) {
   return !!name;
 }
 
+// „@claude-bot“ oder Profil-Link -> „claude-bot“
+function addUser(raw) {
+  const name = raw.trim().replace(/^https?:\/\/[^/]+\//i, "").replace(/^@/, "").replace(/\/+$/, "");
+  if (name && !ignoreUsers.some((u) => u.name.toLowerCase() === name.toLowerCase())) ignoreUsers.push({ name, on: true });
+  return !!name;
+}
+
 wireAdd("nsInput", "nsAdd", addNs);
+wireAdd("userInput", "userAdd", addUser);
 wireAdd("lblInput", "lblAdd", addLabel);
 
 mrOn.addEventListener("change", renderMr);
@@ -181,6 +191,7 @@ async function load() {
   mrOn.checked = !!status.newMrs.enabled;
   namespaces = status.newMrs.namespaces.map((n) => Object.assign({}, n));
   ignoreLabels = status.newMrs.ignoreLabels.map((l) => Object.assign({}, l));
+  ignoreUsers = (status.ignoreUsers || []).map((u) => Object.assign({}, u));
   resolved = status.nsResolved;
   relabel();
   intervalEl.value = String(status.interval);
@@ -219,7 +230,7 @@ saveBtn.addEventListener("click", async () => {
   }
 
   // Noch Getipptes, aber nicht Hinzugefügtes nicht verlieren.
-  for (const [id, add] of [["nsInput", addNs], ["lblInput", addLabel]]) {
+  for (const [id, add] of [["nsInput", addNs], ["lblInput", addLabel], ["userInput", addUser]]) {
     const input = document.getElementById(id);
     if (add(input.value)) input.value = "";
   }
@@ -228,7 +239,7 @@ saveBtn.addEventListener("click", async () => {
   say(t("checking"), true);
   const res = await chrome.runtime.sendMessage({
     type: "save",
-    settings: { url, token: tokenEl.value, interval: Number(intervalEl.value), lang: langEl.value,
+    settings: { url, token: tokenEl.value, interval: Number(intervalEl.value), lang: langEl.value, ignoreUsers,
       newMrs: { enabled: mrOn.checked, namespaces, ignoreLabels } }
   });
   saveBtn.disabled = false;

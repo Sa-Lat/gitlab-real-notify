@@ -402,3 +402,147 @@ RN.suite("Klick, Gelesen, Einstellungen", async (t) => {
   t.eq(h.state.lastPoll, h.now(), "Neu gestartet: frischer Erstabruf");
   h.dispose();
 });
+
+RN.suite("Erledigte entfernen", async (t) => {
+  const h = await RN.loadBackground();
+  h.gl.projects.push({ id: 10, path_with_namespace: "g/p" });
+  h.gl.mrs.push(mr(h, 5, { state: "merged" }), mr(h, 6), mr(h, 7, { state: "closed" }));
+  h.gl.issues.push({ iid: 8, project_id: 10, state: "closed" });
+  const ev = (id, url) => ({ id, title: id, message: "", url, at: 1, read: true });
+  const base = "https://gitlab.example.test/g/p/-/";
+  h.state.history = [
+    ev("a", base + "merge_requests/5#note_1"), ev("b", base + "merge_requests/5"),
+    ev("c", base + "merge_requests/6"), ev("d", base + "merge_requests/7"),
+    ev("e", base + "issues/8"), ev("f", null),
+    ev("g", "https://gitlab.example.test/weg/x/-/merge_requests/1"),
+    ev("h", base + "merge_requests/50")
+  ];
+  const ids = await h.api.dismissDone();
+  t.eq(ids.join(), "a,b,d,e", "Gemergt und geschlossen raus, auch mit #note");
+  t.eq(h.state.history.map((e) => e.id).join(), "c,f,g,h", "Offen, ohne Link, unbekanntes Projekt, !50 bleiben");
+  t.ok(h.gl.calls.every((c) => c.method === "GET"), "Nur lesend");
+  t.eq(h.iconLog[0] + "," + h.iconLog[h.iconLog.length - 1], "busy,icon", "Lila Icon, solange gefragt wird");
+  t.eq(h.gl.calls.filter((c) => /^projects\/g%2Fp\//.test(c.path)).length, 2, "Eine Anfrage pro Projekt und Art");
+  h.dispose();
+});
+
+RN.suite("Erledigte entfernen · beantwortete Kommentare", async (t) => {
+  const h = await RN.loadBackground({ state: { me: { id: 1, username: "lat", name: "Latz" } } });
+  h.gl.projects.push({ id: 10, path_with_namespace: "g/p" });
+  h.gl.mrs.push(mr(h, 5));
+  const ben = { id: 3, name: "Ben" };
+  h.gl.notes["mr:10:5"] = [
+    note(h, 1, h.other, "Frage?", { discussion_id: "A" }),
+    note(h, 2, h.me, "Antwort", { discussion_id: "A" }),          // A: von mir beantwortet
+    note(h, 3, ben, "Noch eine?", { discussion_id: "B" }),
+    note(h, 4, h.other, "Auch?", { discussion_id: "B" }),          // B: nur andere, offen
+    note(h, 5, ben, "Fix das", { discussion_id: "C", resolvable: true, resolved: true }), // C: aufgelöst
+    note(h, 6, h.other, "Lose Bemerkung"),                         // einzeln, später von mir beantwortet
+    note(h, 7, h.other, "added 2 commits", { system: true }),
+    note(h, 8, h.me, "Danke"),
+    note(h, 9, h.other, "Nach meiner Antwort")                     // einzeln, danach nichts von mir
+  ];
+  const base = "https://gitlab.example.test/g/p/-/merge_requests/5";
+  const ev = (id, frag) => ({ id, title: id, message: "", url: base + frag, at: 1, read: true });
+  h.state.history = [ev("a", "#note_1"), ev("b", "#note_3"), ev("c", "#note_5"),
+    ev("d", "#note_6"), ev("e", "#note_7"), ev("f", "#note_9"), ev("g", "")];
+  const ids = await h.api.dismissDone();
+  t.eq(ids.join(), "a,c,d", "Beantwortet, aufgelöst und später erwidert raus");
+  t.eq(h.state.history.map((e) => e.id).join(), "b,e,f,g", "Offener Thread, Systemnotiz, unbeantwortet, MR-Link bleiben");
+  t.eq(h.gl.calls.filter((c) => /discussions$/.test(c.path)).length, 1, "Threads einmal pro MR geholt");
+  h.dispose();
+});
+
+RN.suite("Erledigte entfernen · gebündelte Kommentare", async (t) => {
+  const h = await RN.loadBackground({ state: { me: { id: 1, username: "lat", name: "Latz" } } });
+  h.gl.projects.push({ id: 10, path_with_namespace: "g/p" });
+  h.gl.mrs.push(mr(h, 5, { author: h.me }));
+  commentedOn(h, 5);
+  await h.warm();
+  // Review mit zwei Anmerkungen in zwei Threads -> eine gebündelte Meldung
+  h.gl.notes["mr:10:5"] = [
+    note(h, 11, h.other, "Erstens", { discussion_id: "A" }),
+    note(h, 12, h.other, "Zweitens", { discussion_id: "B" })
+  ];
+  h.gl.mrs[0].updated_at = h.iso();
+  await h.api.poll();
+  t.eq(h.state.history.length, 1, "Eine gebündelte Meldung");
+  t.eq((h.state.history[0].notes || []).join(), "11,12", "kennt beide Kommentare");
+
+  h.advance(60000);
+  h.gl.notes["mr:10:5"].push(note(h, 13, h.me, "Zu erstens", { discussion_id: "A" }));
+  t.eq((await h.api.dismissDone()).length, 0, "Nur einer beantwortet: bleibt");
+  h.gl.notes["mr:10:5"].push(note(h, 14, h.me, "Zu zweitens", { discussion_id: "B" }));
+  t.eq((await h.api.dismissDone()).length, 1, "Beide beantwortet: weg");
+  h.dispose();
+});
+
+RN.suite("Nutzer ignorieren", async (t) => {
+  const h = await RN.loadBackground({ state: { settings: { url: "https://gitlab.example.test", token: "glpat-test",
+    ignoreUsers: [{ name: "anna", on: true }, { name: "ben", on: false }] } } });
+  const ben = { id: 3, username: "ben", name: "Ben" };
+  commentedOn(h, 5);
+  h.gl.mrs.push(mr(h, 5));
+  await h.warm();
+  h.gl.mrs[0].updated_at = h.iso();
+  h.gl.notes["mr:10:5"] = [note(h, 11, h.other, "Bot-Review"), note(h, 12, ben, "Echter Kommentar")];
+  h.gl.todos.push({ id: 9, action_name: "mentioned", target_type: "MergeRequest",
+    target: { iid: 5, title: "MR 5" }, project: { id: 10 }, author: h.other });
+  await h.api.poll();
+  const msgs = shown(h).map((n) => n.message);
+  t.eq(msgs.join(" | "), "Ben: Echter Kommentar", "Anna (ignoriert) weder Kommentar noch Todo; Ben (pausiert) kommt");
+
+  await h.api.saveSettings({ url: "https://gitlab.example.test", token: "",
+    ignoreUsers: [{ name: "@Claude-Bot", on: true }, { name: "claude-bot", on: true }, { name: " ", on: true }] });
+  t.eq(JSON.stringify(h.state.settings.ignoreUsers), '[{"name":"claude-bot","on":true}]', "@ weg, klein, leer und doppelt raus");
+  await h.api.saveSettings({ url: "https://gitlab.example.test", token: "" });
+  t.eq(h.state.settings.ignoreUsers.length, 1, "Speichern ohne Liste behält sie");
+  h.dispose();
+});
+
+RN.suite("Erledigte entfernen · Antwort vom Bot zählt", async (t) => {
+  const bot = { id: 7, username: "claude-bot", name: "Claude" };
+  const h = await RN.loadBackground({ state: { me: { id: 1, username: "lat", name: "Latz" },
+    settings: { url: "https://gitlab.example.test", token: "glpat-test", ignoreUsers: [{ name: "claude-bot", on: true }] } } });
+  h.gl.projects.push({ id: 10, path_with_namespace: "g/p" });
+  h.gl.mrs.push(mr(h, 5));
+  h.gl.notes["mr:10:5"] = [
+    note(h, 1, h.other, "Frage?", { discussion_id: "A" }),
+    note(h, 2, bot, "Antwort vom Bot", { discussion_id: "A" }),
+    note(h, 3, h.other, "Andere Frage?", { discussion_id: "B" })
+  ];
+  const base = "https://gitlab.example.test/g/p/-/merge_requests/5";
+  h.state.history = ["1", "3"].map((n) => ({ id: "n" + n, title: "", message: "", url: base + "#note_" + n, at: 1, read: true }));
+  t.eq((await h.api.dismissDone()).join(), "n1", "Bot-Antwort erledigt den Thread, der andere bleibt");
+  h.dispose();
+});
+
+RN.suite("Alle öffnen", async (t) => {
+  const h = await RN.loadBackground();
+  const base = "https://gitlab.example.test/g/p/-/merge_requests/";
+  const ev = (id, url) => ({ id, title: id, message: "", url, at: 1, read: true });
+  h.state.history = [ev("a", base + "5#note_3"), ev("b", base + "6"), ev("c", null), ev("d", base + "5#note_1")]; // neueste zuerst
+  const n = await h.api.openAll();
+  t.eq(n, 2, "Ein Tab pro MR");
+  t.eq(h.opened.join(" "), base + "6 " + base + "5#note_3", "Älteste zuerst, je MR der neueste Link");
+  t.eq(h.state.history.map((e) => e.id).join(), "c", "Geöffnete raus, ohne Link bleibt");
+  h.dispose();
+});
+
+RN.suite("Erledigte entfernen · neue MRs mit Reviewer", async (t) => {
+  const h = await RN.loadBackground();
+  h.gl.projects.push({ id: 10, path_with_namespace: "g/p" });
+  const ben = { id: 3, username: "ben", name: "Ben" };
+  h.gl.mrs.push(mr(h, 5, { reviewers: [ben] }), mr(h, 6, { reviewers: [] }), mr(h, 7, { reviewers: [ben] }));
+  const base = "https://gitlab.example.test/g/p/-/merge_requests/";
+  const ev = (id, iid, extra) => Object.assign({ id, title: id, message: "Anna: Kommentar", url: base + iid, at: 1, read: true }, extra);
+  h.state.history = [
+    ev("a", 5, { message: "New MR in g by Anna", newMr: true }),  // Reviewer da -> raus
+    ev("b", 6, { message: "New MR in g by Anna", newMr: true }),  // kein Reviewer -> bleibt
+    ev("c", 7, { message: "Neuer MR in g von Anna" }),            // alte Meldung ohne Feld, deutsch -> raus
+    ev("d", 7)                                                     // Kommentar im MR mit Reviewer -> bleibt
+  ];
+  t.eq((await h.api.dismissDone()).join(), "a,c", "Neue MRs mit Reviewer raus, auch alte am Text erkannt");
+  t.eq(h.state.history.map((e) => e.id).join(), "b,d", "Ohne Reviewer und andere Meldungen bleiben");
+  h.dispose();
+});

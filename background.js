@@ -54,6 +54,17 @@ function tx(key, vars) {
   return tr(lang, key, vars);
 }
 
+// Alternative Bot-Nutzer (z. B. ein Bot, der für dich kommentiert): ihre
+// Aktivität wird nicht gemeldet, ihre Antworten zählen bei „Erledigte
+// entfernen“ als deine. Setzen pollNow() und dismissDone() über loadIgnored().
+let ignored = new Set();
+function loadIgnored(settings) {
+  ignored = new Set(((settings && settings.ignoreUsers) || []).filter((u) => u.on).map((u) => u.name.toLowerCase()));
+}
+function muted(user) {
+  return !!user && ignored.has(String(user.username || "").toLowerCase());
+}
+
 // ---------- GitLab, nur lesend ----------
 
 // Die einzige Stelle, die GitLab anfragt. Methode fest auf GET.
@@ -151,7 +162,7 @@ function remember(items, pid, kind, iid, at) {
 // ---------- Was zählt als Ereignis ----------
 
 function relevantNote(note, me) {
-  if (!note.author || note.author.id === me.id) return false;
+  if (!note.author || note.author.id === me.id || muted(note.author)) return false;
   if (mentions(note.body, me.username)) return false;
   return !note.system || SYSTEM_NOTE_RE.test(note.body || "");
 }
@@ -172,7 +183,8 @@ function commentsEvent(notes, item) {
   return {
     title: refOf(item.kind, item.iid) + " " + plain(item.title, 80),
     message: who + ": " + tx("comments", { n: notes.length }) + " · " + plain(bodyText(notes[0].body), 120),
-    url: safeUrl(item.url && item.url + "#note_" + notes[0].id)
+    url: safeUrl(item.url && item.url + "#note_" + notes[0].id),
+    notes: notes.map((n) => n.id) // für „Erledigte entfernen“: alle, nicht nur der verlinkte
   };
 }
 
@@ -218,7 +230,8 @@ function itemEvent(item, stateEv, comments, system) {
   return {
     title: refOf(item.kind, item.iid) + " " + plain(item.title, 80),
     message: parts.join(" · "),
-    url: safeUrl(item.url && (first ? item.url + "#note_" + first.id : item.url))
+    url: safeUrl(item.url && (first ? item.url + "#note_" + first.id : item.url)),
+    notes: comments.map((n) => n.id)
   };
 }
 
@@ -238,7 +251,7 @@ function todoEvent(todo) {
 function stateEvent(x, kind, me) {
   const actor = x.state === "merged" ? (x.merge_user || x.merged_by)
     : x.state === "closed" ? x.closed_by : null;
-  if (actor && actor.id === me.id) return null;
+  if (actor && (actor.id === me.id || muted(actor))) return null;
   const key = { merged: "merged", closed: "closed", opened: "reopened" }[x.state];
   if (!key) return null;
   return {
@@ -252,7 +265,8 @@ function newMrEvent(x, path) {
   return {
     title: refOf("mr", x.iid) + " " + plain(x.title, 80),
     message: tx("newMr", { path }) + (x.author ? tx("by", { name: x.author.name }) : ""),
-    url: safeUrl(x.web_url)
+    url: safeUrl(x.web_url),
+    newMr: true // für „Erledigte entfernen“: mit Reviewer kümmert sich schon jemand
   };
 }
 
@@ -307,7 +321,7 @@ async function checkNewMrs(settings, me, since, now, resolved, state, events) {
       state.seen[x.id] = now;
       const involved = (x.author && x.author.id === me.id) ||
         (x.reviewers || []).concat(x.assignees || []).some((u) => u.id === me.id); // kommt schon als Todo
-      if (!baseline && !involved) events.push(newMrEvent(x, path));
+      if (!baseline && !involved && !muted(x.author)) events.push(newMrEvent(x, path));
     }
     state.base[path] = true;
   }
@@ -351,6 +365,7 @@ async function pollNow() {
   const s = await chrome.storage.local.get(null);
   const settings = s.settings;
   lang = langOf(settings && settings.lang);
+  loadIgnored(settings);
   if (!settings || !settings.url || !settings.token) return { ok: false, error: tx("noSetup") };
   const started = Date.now();
   if (s.pauseUntil && started < s.pauseUntil) return { ok: false, error: s.error };
@@ -369,7 +384,7 @@ async function pollNow() {
     const todos = await pages(settings, "todos", { state: "pending" });
     for (const t of todos) {
       if (t.project && t.target) remember(items, t.project.id, kindOf(t.target_type), t.target.iid, started);
-      if (!first && !known.has(t.id)) events.push(todoEvent(t));
+      if (!first && !known.has(t.id) && !muted(t.author)) events.push(todoEvent(t));
     }
 
     // 2. Threads, in denen du kommentiert hast. `after` ist tagesgenau und
@@ -533,6 +548,24 @@ async function openEvent(id) {
   else try { await chrome.notifications.clear(id); } catch (e) { /* egal */ }
 }
 
+// Alle Meldungen mit Link in Hintergrund-Tabs öffnen: ein Tab pro MR/Issue
+// (Link der neuesten Meldung dazu), älteste zuerst. Geöffnet heißt erledigt,
+// wie beim Klick. Meldungen ohne Link (Sammelmeldung) bleiben stehen.
+async function openAll() {
+  const { history = [] } = await chrome.storage.local.get("history"); // neueste zuerst
+  const urls = new Map(); // Link ohne #… -> Link
+  const ids = [];
+  for (const e of history) {
+    if (!e.url) continue;
+    ids.push(e.id);
+    const base = e.url.replace(/#.*$/, "");
+    if (!urls.has(base)) urls.set(base, e.url);
+  }
+  for (const url of [...urls.values()].reverse()) await chrome.tabs.create({ url, active: false });
+  if (ids.length) await dismiss(ids);
+  return urls.size;
+}
+
 // Über serial(): eine laufende Abfrage schreibt den Verlauf sonst mit dem
 // gerade gelöschten Eintrag zurück.
 function dismiss(ids) {
@@ -545,6 +578,90 @@ function dismiss(ids) {
       try { await chrome.notifications.clear(id); } catch (e) { /* schon weg */ }
     }
   });
+}
+
+// Erledigtes aus dem Verlauf nehmen: Meldungen zu MRs/Issues, die inzwischen
+// gemergt oder geschlossen sind, zu Kommentaren, deren Thread aufgelöst ist
+// oder auf die du (oder dein Bot) danach geantwortet hast, und „Neuer MR“-
+// Meldungen, deren MR schon einen Reviewer hat. Fragt GitLab live (der Verlauf
+// kennt nur die URL): pro Projekt eine Anfrage für den Stand, pro offenem
+// MR/Issue mit Kommentar-Meldung eine für die Threads. Meldungen ohne
+// MR/Issue-Link bleiben stehen.
+async function dismissDone() {
+  const { settings, me, history = [] } = await chrome.storage.local.get(["settings", "me", "history"]);
+  loadIgnored(settings);
+  const base = settings.url.replace(/\/*$/, "/");
+  const keyOfEvent = (e) => {
+    const m = (e.url || "").startsWith(base) && /^(.+?)\/-\/(merge_requests|issues)\/(\d+)(?!\d)/.exec(e.url.slice(base.length));
+    return m ? m[1] + "|" + m[2] + "|" + m[3] : null;
+  };
+  const groups = {}; // "pfad|art" -> iids
+  for (const e of history) {
+    const k = keyOfEvent(e);
+    if (!k) continue;
+    const [path, kind, iid] = k.split("|");
+    (groups[path + "|" + kind] = groups[path + "|" + kind] || new Set()).add(iid);
+  }
+  const done = new Set(); // "pfad|art|iid", gemergt oder geschlossen
+  const reviewed = new Set(); // "pfad|art|iid", offener MR mit Reviewer
+  const answered = new Set(); // Meldungs-IDs
+  await setIcon("busy");
+  try {
+    for (const [g, iids] of Object.entries(groups)) {
+      const [path, kind] = g.split("|");
+      const all = [...iids];
+      for (let i = 0; i < all.length; i += IIDS_PER_CALL) {
+        try {
+          const list = await pages(settings, "projects/" + encodeURIComponent(path) + "/" + kind, { "iids[]": all.slice(i, i + IIDS_PER_CALL) });
+          for (const x of list) {
+            if (x.state !== "opened") done.add(path + "|" + kind + "|" + x.iid);
+            else if ((x.reviewers || []).length) reviewed.add(path + "|" + kind + "|" + x.iid);
+          }
+        } catch (e) {
+          if (e.status !== 404) throw e; // Projekt weg oder kein Zugriff: stehen lassen
+        }
+      }
+    }
+    // Kommentar-Meldungen zu noch offenen MRs/Issues. Gebündelte kennen alle
+    // ihre Kommentare (notes), ältere und einzelne nur den aus dem Link.
+    const byItem = {};
+    for (const e of history) {
+      const k = keyOfEvent(e);
+      const m = /#note_(\d+)$/.exec(e.url || "");
+      const notes = e.notes && e.notes.length ? e.notes : m ? [Number(m[1])] : [];
+      if (k && notes.length && me && !done.has(k)) (byItem[k] = byItem[k] || []).push({ id: e.id, notes });
+    }
+    for (const [k, evs] of Object.entries(byItem)) {
+      const [path, kind, iid] = k.split("|");
+      let threads;
+      try {
+        threads = await pages(settings, "projects/" + encodeURIComponent(path) + "/" + kind + "/" + iid + "/discussions");
+      } catch (e) {
+        if (e.status !== 404) throw e;
+        continue;
+      }
+      const isAnswered = (id) => {
+        const thread = threads.find((d) => d.notes.some((n) => n.id === id));
+        const n = thread && thread.notes.find((x) => x.id === id);
+        if (!n || n.system) return false; // Commits, Freigaben … beantwortet man nicht
+        const resolvable = thread.notes.filter((x) => x.resolvable);
+        if (resolvable.length && resolvable.every((x) => x.resolved)) return true;
+        // Einzelkommentar ohne Thread: jede spätere Antwort von dir im MR zählt.
+        const scope = thread.individual_note ? threads.flatMap((d) => d.notes) : thread.notes;
+        return scope.some((x) => !x.system && x.author && (x.author.id === me.id || muted(x.author)) && x.id > id);
+      };
+      // Gebündelt: erst weg, wenn jeder Kommentar darin erledigt ist.
+      for (const ev of evs) if (ev.notes.every(isAnswered)) answered.add(ev.id);
+    }
+  } finally {
+    await setIcon("icon");
+  }
+  // Meldungen von vor 0.5.0 kennen newMr nicht: dann am Text erkennen, in jeder Sprache.
+  const isNewMr = (e) => e.newMr || Object.values(I18N).some((d) => (e.message || "").startsWith(d.newMr.split("{")[0]));
+  const ids = history.filter((e) => done.has(keyOfEvent(e)) || answered.has(e.id) ||
+    (isNewMr(e) && reviewed.has(keyOfEvent(e)))).map((e) => e.id);
+  if (ids.length) await dismiss(ids);
+  return ids;
 }
 
 function markRead() {
@@ -573,6 +690,7 @@ async function saveSettings(input) {
     token: String(input.token || "").trim() || old.token || "",
     interval: intervalOf({ interval: input.interval != null ? input.interval : old.interval }),
     lang: ["auto", "en", "de"].includes(input.lang) ? input.lang : old.lang || "auto",
+    ignoreUsers: cleanList((input.ignoreUsers || old.ignoreUsers || []).map((u) => ({ name: String(u.name || "").replace(/^@/, "").toLowerCase(), on: u.on })), "name"),
     newMrs: {
       enabled: !!nm.enabled,
       namespaces: cleanList(nm.namespaces, "path"),
@@ -645,6 +763,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         interval: intervalOf(settings), intervals: INTERVALS,
         langSetting: settings.lang || "auto", lang: langOf(settings.lang),
         newMrs: settings.newMrs || { enabled: false, namespaces: [], ignoreLabels: [] },
+        ignoreUsers: settings.ignoreUsers || [],
         nsResolved: s.nsResolved || {},
         me: s.me, lastPoll: s.lastPoll, error: s.error, history: s.history || []
       });
@@ -661,6 +780,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     } else if (msg.type === "dismiss") {
       await dismiss(msg.ids || null); // null = alle
       sendResponse({ ok: true });
+    } else if (msg.type === "openAll") {
+      sendResponse({ ok: true, tabs: await openAll() });
+    } else if (msg.type === "dismissDone") {
+      try {
+        sendResponse({ ok: true, ids: await dismissDone() });
+      } catch (e) {
+        sendResponse({ ok: false, error: errorText(e) });
+      }
     } else if (msg.type === "save") {
       sendResponse(await saveSettings(msg.settings));
     }
