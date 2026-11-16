@@ -45,7 +45,12 @@ const IIDS_PER_CALL = 50; // hält die URL kurz
 // Systemnotizen, für die GitLab bei „Participate“ auch eine Mail schickt.
 // Label-, Meilenstein- und Beschreibungsänderungen gehören nicht dazu.
 // Gemergt/geschlossen kommen nicht als Notiz, sondern aus dem Statuswechsel.
-const SYSTEM_NOTE_RE = /^(added \d+ (new )?commits?|approved this merge request|unapproved this merge request|marked this merge request as ready|requested review from|assigned to)/i;
+// „Draft entfernt“ steht nicht hier: das erkennt pollNow() am Feld `draft`.
+const SYSTEM_NOTE_RE = /^(added \d+ (new )?commits?|approved this merge request|unapproved this merge request|requested review from|assigned to)/i;
+// Nur um herauszufinden, wer das Draft entfernt hat. GitLab schreibt
+// „marked this merge request as **ready**“, ältere Versionen „… as ready“
+// oder „unmarked as a **Work In Progress**“.
+const READY_NOTE_RE = /^(marked this merge request as \**ready|unmarked as a \**work in progress)/i;
 
 // Sprache der Meldungen; pollNow() setzt sie aus den Einstellungen. Läuft
 // alles über serial(), also kein Durcheinander zwischen zwei Abfragen.
@@ -287,10 +292,13 @@ function stateEvent(x, kind, me) {
   };
 }
 
-function newMrEvent(x, path) {
+// since: Beginn des Abfragefensters. Älter angelegt heißt: war bisher Draft
+// und ist jetzt bereit — dann „Bereit für Review“ statt „Neuer MR“.
+function newMrEvent(x, path, since) {
+  const ready = Date.parse(x.created_at) < Date.parse(since);
   return {
     title: refOf("mr", x.iid) + " " + plain(x.title, 80),
-    message: tx("newMr", { path }) + (x.author ? tx("by", { name: x.author.name }) : ""),
+    message: tx(ready ? "readyMr" : "newMr", { path }) + (x.author ? tx("by", { name: x.author.name }) : ""),
     url: safeUrl(x.web_url),
     newMr: true, // für „Erledigte entfernen“: mit Reviewer kümmert sich schon jemand
     at: Date.parse(x.updated_at), // neu angelegt oder gerade auf Ready gesetzt
@@ -349,7 +357,7 @@ async function checkNewMrs(settings, me, since, now, resolved, state, events) {
       state.seen[x.id] = now;
       const involved = (x.author && x.author.id === me.id) ||
         (x.reviewers || []).concat(x.assignees || []).some((u) => u.id === me.id); // kommt schon als Todo
-      if (!baseline && !involved && !muted(x.author)) events.push(newMrEvent(x, path));
+      if (!baseline && !involved && !muted(x.author)) events.push(newMrEvent(x, path, since));
     }
     state.base[path] = true;
   }
@@ -456,6 +464,10 @@ async function pollNow() {
       it.url = x.web_url;
       const from = it.state;
       it.state = x.state;
+      // Draft merken, um „Draft entfernt“ am Feld zu erkennen — verlässlicher
+      // als der Notiztext, der je nach GitLab-Version anders lautet.
+      const wasDraft = it.draft;
+      if (kind === "mr") it.draft = !!(x.draft || x.work_in_progress);
       if (first) continue;
 
       const changedState = from && from !== x.state;
@@ -490,7 +502,24 @@ async function pollNow() {
         const others = [...new Set(approvers)].filter((a) => !merger || a !== merger.name);
         if (others.length) stateEv.message += tx("approvedBy", { names: others.join(", ") });
       }
-      const ev = itemEvent(it, stateEv, comments, system);
+      // Draft entfernt (Statuswechsel wie Merge gehen vor). Wer es war, steht
+      // in der Systemnotiz; eigene und die von Bot-Nutzern werden nicht gemeldet.
+      // Fehlt die Notiz und der MR ist deiner, warst es vermutlich du.
+      let readyEv = null;
+      if (wasDraft === true && it.draft === false && !stateEv) {
+        const n = fresh.find((n) => n.system && READY_NOTE_RE.test(n.body || ""));
+        const actor = n ? n.author : null;
+        const mine = actor ? actor.id === me.id || muted(actor) : x.author && x.author.id === me.id;
+        if (!mine) {
+          readyEv = {
+            title: refOf("mr", x.iid) + " " + plain(x.title, 80),
+            message: tx("markedReady") + (actor ? tx("by", { name: actor.name }) : ""),
+            url: safeUrl(x.web_url),
+            at: Date.parse(n ? n.created_at : x.updated_at)
+          };
+        }
+      }
+      const ev = itemEvent(it, stateEv || readyEv, comments, system);
       if (ev) events.push(Object.assign(ev, { labels: labelsOf(x.labels) }));
       if (notes.length) it.noteId = Math.max(it.noteId || 0, ...notes.map((n) => n.id));
     }

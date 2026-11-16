@@ -62,6 +62,17 @@ RN.suite("Neue MRs · Draft, dann Ready", async (t) => {
   Object.assign(h.gl.mrs[0], { draft: false, updated_at: h.iso() });
   await h.api.poll();
   t.eq(shown(h).length, 1, "Auf Ready gesetzt: jetzt gemeldet");
+
+  // Gestern als Draft angelegt (Pipeline testen), heute Draft entfernt
+  h.gl.mrs.push(navMr(h, 4, { draft: true, created_at: h.iso(h.now() - 86400000) }));
+  h.advance(60000);
+  await h.api.poll();
+  h.advance(60000);
+  Object.assign(h.gl.mrs[1], { draft: false, updated_at: h.iso() });
+  await h.api.poll();
+  const ev = h.state.history[0];
+  t.eq(ev.message, "Ready for review in " + NAV + " by Anna", "Älterer MR: „Bereit für Review“ statt „Neuer MR“");
+  t.ok(ev.newMr === true, "zählt weiter als neuer MR (Erledigte entfernen)");
   h.dispose();
 });
 

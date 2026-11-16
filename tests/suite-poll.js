@@ -754,3 +754,34 @@ RN.suite("Wichtige Labels mit Platzhalter", async (t) => {
   t.eq(h.state.history[0].labels[0], "SLA-Relevant", "Treffer per Platzhalter steht vorn und fällt nicht weg");
   h.dispose();
 });
+
+RN.suite("Draft entfernt bei beteiligten MRs", async (t) => {
+  const h = await RN.loadBackground();
+  // !5: ich bin Reviewer · !6: ich bin Reviewer, alte GitLab-Notiz fehlt · !7: meiner, ich setze ihn auf Ready · !8: Ready + Kommentar
+  h.gl.mrs.push(
+    mr(h, 5, { draft: true, reviewer_ids: [1] }),
+    mr(h, 6, { draft: true, reviewer_ids: [1] }),
+    mr(h, 7, { draft: true, author: h.me }),
+    mr(h, 8, { draft: true, reviewer_ids: [1] }),
+    mr(h, 9, { draft: true, author: h.me }));
+  await h.warm();
+  for (const x of h.gl.mrs) Object.assign(x, { draft: false, updated_at: h.iso() });
+  h.gl.notes["mr:10:5"] = [note(h, 51, h.other, "marked this merge request as **ready**", { system: true })];
+  h.gl.notes["mr:10:7"] = [note(h, 71, h.me, "marked this merge request as **ready**", { system: true })];
+  h.gl.notes["mr:10:8"] = [note(h, 81, h.other, "marked this merge request as **ready**", { system: true }),
+    note(h, 82, h.other, "Bitte jetzt reviewen")];
+  await h.api.poll();
+  const msg = (iid) => (h.state.history.find((e) => e.title.startsWith("!" + iid + " ")) || {}).message;
+  t.eq(msg(5), "Marked as ready by Anna", "Reviewer: Draft entfernt wird gemeldet, mit Namen, ohne **");
+  t.eq(msg(6), "Marked as ready", "Ohne passende Notiz (ältere GitLab): trotzdem gemeldet");
+  t.eq(msg(7), undefined, "Eigener MR, selbst auf Ready gesetzt: nichts");
+  t.eq(msg(9), undefined, "Eigener MR ohne Notiz: vermutlich selbst — nichts");
+  t.ok(/^Marked as ready by Anna · .*Bitte jetzt reviewen/.test(msg(8) || ""), "Ready und Kommentar in einer Meldung", msg(8));
+  t.eq(h.state.history.filter((e) => /marked this merge request/i.test(e.message)).length, 0, "Keine zweite Meldung aus der Systemnotiz");
+
+  h.advance(60000);
+  for (const k of Object.keys(h.notes)) delete h.notes[k];
+  await h.api.poll();
+  t.eq(shown(h).length, 0, "Nächste Minute: nichts doppelt");
+  h.dispose();
+});

@@ -5,6 +5,17 @@ anheben: größere neue Funktion → Minor (0.**x**.0), Fehlerbehebung oder
 kleine Ergänzung wie ein Link → Patch (0.x.**y**). Danach
 `python firefox.py` neu laufen lassen.
 
+## 0.6.2 — 2026-11-16
+
+- **Draft entfernt wird zuverlässig gemeldet:** bei MRs, an denen du beteiligt
+  bist (Reviewer, Assignee, kommentiert), erkennt die Erweiterung den Wechsel
+  jetzt am Feld `draft` statt am Notiztext. Vorher fiel die Meldung durch, weil
+  GitLab „marked this merge request as **ready**“ mit Sternchen schreibt. Wer
+  es war, kommt aus der Notiz („Draft entfernt, bereit für Review von Anna“);
+  eigene und Bot-Aktionen bleiben still.
+- „Neue MRs“: Ein MR, der schon vor der letzten Abfrage als Draft angelegt war
+  und jetzt bereit ist, heißt „Bereit für Review in …“ statt „Neuer MR in …“.
+
 ## 0.6.1 — 2026-11-13
 
 - **Wichtige Labels mit Platzhalter:** `*` steht für beliebig viele Zeichen,
