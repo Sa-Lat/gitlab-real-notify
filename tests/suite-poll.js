@@ -51,7 +51,7 @@ RN.suite("Erstabruf merkt sich den Stand, meldet nichts", async (t) => {
   t.ok(!!h.state.items["issue:11:3"], "Todo-Ziel wird beobachtet");
   t.eq(h.state.todoIds.join(), "900", "Bestehende Todos als gesehen gemerkt");
   t.eq(h.state.lastPoll, RN.START, "lastPoll gesetzt");
-  t.eq(h.state.me.username, "lat", "Eigener Nutzer gemerkt");
+  t.eq(h.state.me.username, "max", "Eigener Nutzer gemerkt");
   h.dispose();
 });
 
@@ -65,18 +65,18 @@ RN.suite("Neue Kommentare im beobachteten Thread", async (t) => {
   h.gl.notes["mr:10:5"] = [
     note(h, 11, h.other, "Sieht gut aus,\n  aber bitte Tests"),
     note(h, 12, h.me, "Mache ich"),
-    note(h, 13, h.other, "@lat schau mal"),
+    note(h, 13, h.other, "@max schau mal"),
     note(h, 14, h.other, "added 2 commits\n\n* abc", { system: true }),
     note(h, 15, h.other, "changed the description", { system: true }),
-    note(h, 16, h.other, "@latte ist nicht gemeint")
+    note(h, 16, h.other, "@maxi ist nicht gemeint")
   ];
   await h.api.poll();
   const msgs = shown(h).map((n) => n.message);
   t.eq(msgs.length, 1, "Eine Meldung für den MR", msgs);
   t.eq(msgs[0], "Anna: 2 new comments · Anna added 2 commits * abc",
-    "Kommentare (zwei, @latte zählt mit) und Commits zusammen", msgs);
+    "Kommentare (zwei, @maxi zählt mit) und Commits zusammen", msgs);
   t.ok(!msgs.some((m) => m.includes("Mache ich")), "Eigener Kommentar nicht gemeldet");
-  t.ok(!msgs.some((m) => m.includes("@lat schau")), "Erwähnung nicht doppelt (kommt als Todo)");
+  t.ok(!msgs.some((m) => m.includes("@max schau")), "Erwähnung nicht doppelt (kommt als Todo)");
   t.ok(!msgs.some((m) => m.includes("description")), "Beschreibungsänderung nicht gemeldet");
   t.eq(shown(h)[0].title, "!5 Login reparieren", "Titel mit MR-Referenz");
   t.eq(h.state.history[0].url, "https://gitlab.example.test/g/p/-/merge_requests/5#note_11", "Link springt zum ersten neuen Kommentar");
@@ -427,7 +427,7 @@ RN.suite("Erledigte entfernen", async (t) => {
 });
 
 RN.suite("Erledigte entfernen · beantwortete Kommentare", async (t) => {
-  const h = await RN.loadBackground({ state: { me: { id: 1, username: "lat", name: "Latz" } } });
+  const h = await RN.loadBackground({ state: { me: { id: 1, username: "max", name: "Max" } } });
   h.gl.projects.push({ id: 10, path_with_namespace: "g/p" });
   h.gl.mrs.push(mr(h, 5));
   const ben = { id: 3, name: "Ben" };
@@ -454,7 +454,7 @@ RN.suite("Erledigte entfernen · beantwortete Kommentare", async (t) => {
 });
 
 RN.suite("Erledigte entfernen · gebündelte Kommentare", async (t) => {
-  const h = await RN.loadBackground({ state: { me: { id: 1, username: "lat", name: "Latz" } } });
+  const h = await RN.loadBackground({ state: { me: { id: 1, username: "max", name: "Max" } } });
   h.gl.projects.push({ id: 10, path_with_namespace: "g/p" });
   h.gl.mrs.push(mr(h, 5, { author: h.me }));
   commentedOn(h, 5);
@@ -502,7 +502,7 @@ RN.suite("Nutzer ignorieren", async (t) => {
 
 RN.suite("Erledigte entfernen · Antwort vom Bot zählt", async (t) => {
   const bot = { id: 7, username: "claude-bot", name: "Claude" };
-  const h = await RN.loadBackground({ state: { me: { id: 1, username: "lat", name: "Latz" },
+  const h = await RN.loadBackground({ state: { me: { id: 1, username: "max", name: "Max" },
     settings: { url: "https://gitlab.example.test", token: "glpat-test", ignoreUsers: [{ name: "claude-bot", on: true }] } } });
   h.gl.projects.push({ id: 10, path_with_namespace: "g/p" });
   h.gl.mrs.push(mr(h, 5));
@@ -559,9 +559,9 @@ RN.suite("Token bleibt bei der eigenen Adresse", async (t) => {
 
 RN.suite("Erwähnung nur für genau mich", async (t) => {
   const h = await RN.loadBackground();
-  t.ok(h.api.mentions("danke @lat.", "lat"), "@lat am Satzende zählt");
-  t.ok(!h.api.mentions("frag mal @lat.mueller", "lat"), "@lat.mueller ist jemand anderes");
-  t.ok(!h.api.mentions("@lat-bot", "lat"), "@lat-bot ist jemand anderes");
+  t.ok(h.api.mentions("danke @max.", "max"), "@max am Satzende zählt");
+  t.ok(!h.api.mentions("frag mal @max.mueller", "max"), "@max.mueller ist jemand anderes");
+  t.ok(!h.api.mentions("@max-bot", "max"), "@max-bot ist jemand anderes");
   h.dispose();
 });
 
@@ -783,5 +783,16 @@ RN.suite("Draft entfernt bei beteiligten MRs", async (t) => {
   for (const k of Object.keys(h.notes)) delete h.notes[k];
   await h.api.poll();
   t.eq(shown(h).length, 0, "Nächste Minute: nichts doppelt");
+  h.dispose();
+});
+
+RN.suite("Pipeline und Konflikt ohne eigenen Namen", async (t) => {
+  const h = await RN.loadBackground();
+  const todo = (id, action, extra) => Object.assign({ id, action_name: action, target_type: "MergeRequest",
+    target: { iid: id, title: "MR " + id }, project: { id: 10 }, author: h.me, created_at: h.iso() }, extra);
+  t.eq(h.api.todoEvent(todo(1, "build_failed", { body: "Pipeline #42" })).message, "Pipeline failed", "Pipeline: ohne Namen, ohne Text");
+  t.eq(h.api.todoEvent(todo(2, "unmergeable")).message, "Can no longer be merged", "Konflikt: ohne Namen, groß geschrieben");
+  t.eq(h.api.todoEvent(todo(3, "merge_train_removed")).message, "Was removed from the merge train", "Merge-Train: ohne Namen");
+  t.eq(h.api.todoEvent(todo(4, "review_requested", { author: h.other })).message, "Anna requested your review", "Andere To-dos: mit Namen wie bisher");
   h.dispose();
 });

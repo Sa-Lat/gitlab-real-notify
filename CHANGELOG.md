@@ -5,6 +5,14 @@ anheben: größere neue Funktion → Minor (0.**x**.0), Fehlerbehebung oder
 kleine Ergänzung wie ein Link → Patch (0.x.**y**). Danach
 `python firefox.py` neu laufen lassen.
 
+## 0.6.3 — 2026-11-17
+
+- To-dos „Pipeline fehlgeschlagen“, „lässt sich nicht mehr mergen“ und „aus
+  dem Merge-Train genommen“ ohne Namen davor. Der „Autor“ ist dort meist man
+  selbst; „Ben Pipeline fehlgeschlagen“ las sich wie die Tat eines anderen.
+- README neu gegliedert: erst was die Erweiterung bietet (alle Meldungsarten,
+  Popup, Einstellungen, Sicherheit und Datenschutz), dann die Technik.
+
 ## 0.6.2 — 2026-11-16
 
 - **Draft entfernt wird zuverlässig gemeldet:** bei MRs, an denen du beteiligt

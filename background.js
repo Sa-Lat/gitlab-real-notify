@@ -267,9 +267,13 @@ function todoEvent(todo) {
   const t = todo.target || {};
   const what = I18N.en["todo." + todo.action_name] ? tx("todo." + todo.action_name) : todo.action_name;
   const body = todo.body && todo.action_name !== "build_failed" ? ": " + plain(bodyText(todo.body), 120) : "";
+  // Hier ist der „Autor“ meist man selbst (wer die Pipeline ausgelöst hat) —
+  // „Ben pipeline failed“ liest sich, als hätte jemand anderes etwas getan.
+  const noAuthor = ["build_failed", "unmergeable", "merge_train_removed"].includes(todo.action_name);
   return {
     title: (kind ? refOf(kind, t.iid) + " " : "") + plain(t.title || todo.project && todo.project.name, 80),
-    message: (todo.author ? todo.author.name + " " : "") + what + body,
+    message: noAuthor ? what.charAt(0).toUpperCase() + what.slice(1) + body
+      : (todo.author ? todo.author.name + " " : "") + what + body,
     url: safeUrl(todo.target_url),
     at: Date.parse(todo.created_at),
     todo: true, // wartet auf dich: steht im Popup oben

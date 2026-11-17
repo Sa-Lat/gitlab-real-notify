@@ -132,7 +132,7 @@ const RN = (function () {
     // Wie im Firefox-Build: i18n.js vorweg, dann braucht background.js kein importScripts.
     const i18n = await fetchSource("../i18n.js");
     let now = START;
-    const me = { id: 1, username: "lat", name: "Latz" };
+    const me = { id: 1, username: "max", name: "Max" };
     const gl = makeGitLab(me);
     const state = Object.assign({
       settings: { url: "https://gitlab.example.test", token: "glpat-test" }
